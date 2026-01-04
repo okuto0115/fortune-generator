@@ -1,19 +1,26 @@
 /*
-  app.js / Version 1.4
+  app.js / Version 1
   ------------------------------------------------------------
-  ✅ 入力内容をセッション越えで保持（localStorage）
-  ✅ フォーム変更時に自動保存
-  ✅ クリアで保存も削除
+  ✅ 入力の保持（localStorage）
+  ✅ 都道府県/出生時間：プルダウン
+  ✅ 生成ボタン1回で：
+     - 人生鑑定（メイン）を出す
+     - 今日の3ステップ（折りたたみ）も更新
 */
 
+import { pad2 } from "./utils.js";
 import {
-  lonToSign,
-  sunEclipticLongitude, moonEclipticLongitude,
-  mercuryLon, venusLon, marsLon,
-  makeDateUTCFromJST
-} from "./astro.js";
+  lifePath,
+  calcZodiacSign,
+  signElement,
+  typeKeyFrom,
+  buildTodayBonus,
+  buildPublicText,
+  TEXT_DB
+} from "./fortune.js";
 
-import { lifePath, typeKeyFrom, buildTexts, TEXT_DB } from "./fortune.js";
+/* ====== 定数 ====== */
+const STORAGE_KEY = "kuma_fortune_v1_form";
 
 const PREFECTURES = [
   "都道府県",
@@ -37,56 +44,10 @@ const TIME_BLOCKS = [
   { value:"late",    label:"深夜（22–5）", hour:23, min:30 },
 ];
 
+/* ====== DOM ====== */
 const $ = (id)=>document.getElementById(id);
 
-/* ===== localStorage（入力保持）===== */
-const STORAGE_KEY = "kuma_fortune_form_v14";
-
-function readSaved(){
-  try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  }catch{
-    return null;
-  }
-}
-function writeSaved(obj){
-  try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
-  }catch{}
-}
-function clearSaved(){
-  try{ localStorage.removeItem(STORAGE_KEY); }catch{}
-}
-
-function currentFormState(){
-  return {
-    name: $("name").value ?? "",
-    dob: $("dob").value ?? "",
-    place: $("place").value ?? "都道府県",
-    time: $("time").value ?? "unknown",
-    tone: $("tone").value ?? "normal",
-  };
-}
-function applyFormState(st){
-  if (!st) return;
-  if (typeof st.name === "string") $("name").value = st.name;
-  if (typeof st.dob === "string") $("dob").value = st.dob;
-  if (typeof st.place === "string") $("place").value = st.place;
-  if (typeof st.time === "string") $("time").value = st.time;
-  if (typeof st.tone === "string") $("tone").value = st.tone;
-}
-
-// 保存の頻度を落とす（入力のたびに保存でもOKだけど、軽くデバウンス）
-let saveTimer = null;
-function scheduleSave(){
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    writeSaved(currentFormState());
-  }, 150);
-}
-
-/* ===== select初期化 ===== */
+/* ====== select初期化 ====== */
 function initSelect(id, items, getValue=(x)=>x, getLabel=(x)=>x){
   const el = $(id);
   el.innerHTML = "";
@@ -98,123 +59,122 @@ function initSelect(id, items, getValue=(x)=>x, getLabel=(x)=>x){
   }
 }
 
-function getSelectedTime(){
-  const v = $("time").value;
-  return TIME_BLOCKS.find(x=>x.value===v) ?? TIME_BLOCKS[0];
+/* ====== 保存/復元 ====== */
+function readSaved(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch{ return null; }
+}
+function writeSaved(st){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(st)); }catch{}
+}
+function clearSaved(){
+  try{ localStorage.removeItem(STORAGE_KEY); }catch{}
 }
 
-function moonInfo(dobStr, timeObj){
-  if (timeObj.value !== "unknown"){
-    const dateUTC = makeDateUTCFromJST(dobStr, timeObj.hour, timeObj.min);
-    const lon = moonEclipticLongitude(dateUTC);
-    return { info: lonToSign(lon), lon };
-  }
-  const d0 = makeDateUTCFromJST(dobStr, 0, 0);
-  const d1 = makeDateUTCFromJST(dobStr, 23, 59);
-  const lon0 = moonEclipticLongitude(d0);
-  const lon1 = moonEclipticLongitude(d1);
-  const s0 = lonToSign(lon0);
-  const s1 = lonToSign(lon1);
-  if (s0 === s1){
-    return { info: s0, lon:(lon0+lon1)/2, boundary:false };
-  }
-  return { info: `候補：${s0} / ${s1}（出生時間で確定）`, lon:lon0, boundary:true };
-}
-
-function setBadges({ sunSign, moonSignInfo, lp }){
-  const face = TEXT_DB.faceLabel[sunSign] ?? "-";
-  const core = moonSignInfo.includes("候補")
-    ? "二択っぽい（時間で変わる）"
-    : (TEXT_DB.coreLabel[moonSignInfo] ?? "-");
-  const num = TEXT_DB.numLabel[lp] ?? "";
-  $("badgeFace").textContent = face;
-  $("badgeCore").textContent = core;
-  $("badgeNum").textContent = `${lp}（${num}）`;
-}
-
-function setTypeUI(typeInfo, typeKey){
-  $("typeTitle").textContent = `タイプ：${typeInfo.name}`;
-  $("typeDesc").textContent = typeInfo.desc;
-  $("typeMeta").textContent = `${typeInfo.tags} / typeKey:${typeKey}`;
-}
-
-function todayTransitSigns(){
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth()+1).padStart(2,"0");
-  const d = String(now.getDate()).padStart(2,"0");
-  const todayStr = `${y}-${m}-${d}`;
-
-  const dateUTC = makeDateUTCFromJST(todayStr, 12, 0);
+function currentState(){
   return {
-    sun: lonToSign(sunEclipticLongitude(dateUTC)),
-    moon: lonToSign(moonEclipticLongitude(dateUTC)),
-    mars: lonToSign(marsLon(dateUTC)),
-    todayStr
+    name: $("name").value ?? "",
+    dob: $("dob").value ?? "",
+    place: $("place").value ?? "都道府県",
+    time: $("time").value ?? "unknown",
+    tone: $("tone").value ?? "normal",
   };
 }
+function applyState(st){
+  if (!st) return;
+  if (typeof st.name === "string") $("name").value = st.name;
+  if (typeof st.dob === "string") $("dob").value = st.dob;
+  if (typeof st.place === "string") $("place").value = st.place;
+  if (typeof st.time === "string") $("time").value = st.time;
+  if (typeof st.tone === "string") $("tone").value = st.tone;
+}
 
+let saveTimer = null;
+function scheduleSave(){
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=> writeSaved(currentState()), 120);
+}
+
+function wireAutoSave(){
+  ["name","dob","place","time","tone"].forEach(id=>{
+    $(id).addEventListener("input", scheduleSave);
+    $(id).addEventListener("change", scheduleSave);
+  });
+}
+
+/* ====== 今日の元素（簡易） ======
+   ※本格的にするなら天体計算が必要。
+   今は「今日の日付から擬似的に月の元素を回す」だけ。
+   “根拠”は「日付→決定的」になっているので、適当ランダムではない。
+*/
+function todayElemFromDate(todayStr){
+  const elems = ["FIRE","EARTH","AIR","WATER"];
+  // 文字列を元に決定的に選ぶ
+  let sum = 0;
+  for (const ch of todayStr) sum += ch.charCodeAt(0);
+  return elems[sum % elems.length];
+}
+function getTodayStr(){
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = pad2(now.getMonth()+1);
+  const d = pad2(now.getDate());
+  return `${y}-${m}-${d}`;
+}
+
+/* ====== 生成 ====== */
 function handleGenerate(){
   const dobStr = $("dob").value;
   if (!dobStr) return alert("生年月日を入力してね");
 
   const name = $("name").value.trim();
-  const place = $("place").value;
   const toneKey = $("tone").value;
+  const place = $("place").value;
+  const timeKey = $("time").value;
 
-  const timeObj = getSelectedTime();
-  const timeLabel = timeObj.label;
-
-  const birthUTC = makeDateUTCFromJST(dobStr, 12, 0);
-
-  const sunLon = sunEclipticLongitude(birthUTC);
-  const sunSign = lonToSign(sunLon);
-
-  const moon = moonInfo(dobStr, timeObj);
-  const moonSignInfo = moon.info;
-
-  const mercLon = mercuryLon(birthUTC);
-  const venLon  = venusLon(birthUTC);
-  const marLon  = marsLon(birthUTC);
-
-  const mercurySign = lonToSign(mercLon);
-  const venusSign   = lonToSign(venLon);
-  const marsSign    = lonToSign(marLon);
-
+  // メイン判定：太陽星座 + 数秘 → 20タイプ
+  const birthDate = new Date(dobStr);
+  const sunSign = calcZodiacSign(birthDate);
   const lp = lifePath(dobStr);
   const typeKey = typeKeyFrom(sunSign, lp);
 
-  const today = todayTransitSigns();
+  // 今日（おまけ）の根拠
+  const todayStr = getTodayStr();
+  const youElem = signElement(sunSign);
+  const todayElem = todayElemFromDate(todayStr);
 
-  const lons = {
-    sun: sunLon,
-    moon: moon.lon,
-    mercury: mercLon,
-    venus: venLon,
-    mars: marLon
+  const ctx = {
+    name, dobStr, place,
+    timeKey,
+    toneKey,
+    sunSign,
+    lp,
+    typeKey,
+    youElem,
+    todayElem,
+    todayStr
   };
 
-  const result = buildTexts({
-    name, place, dobStr, toneKey,
-    timeLabel,
-    sunSign,
-    moonSignInfo,
-    moonSign: moonSignInfo.includes("候補") ? "（候補）" : moonSignInfo,
-    mercurySign, venusSign, marsSign,
-    lp, typeKey,
-    todaySigns: { sun: today.sun, moon: today.moon, mars: today.mars },
-    todayStr: today.todayStr,
-    lons
-  });
+  const todayBonus = buildTodayBonus(ctx);
+  const publicText = buildPublicText(ctx, todayBonus);
 
-  setBadges({ sunSign, moonSignInfo, lp });
-  setTypeUI(result.type, typeKey);
+  // UI表示
+  const type = TEXT_DB.types20[typeKey] ?? { name:"なぞのクマ", desc:"タイプ情報が見つからない。", tags:"-" };
+  $("typeTitle").textContent = `${type.name}`;
+  $("typeDesc").textContent = `${type.desc}`;
 
-  $("out").value = result.publicText;
-  $("devout").value = result.devText;
+  $("out").value = publicText;
 
-  // 生成したタイミングでも保存（最新に）
-  writeSaved(currentFormState());
+  // 折りたたみ：今日の3ステップ
+  $("todaySteps").textContent =
+    `① ${todayBonus.steps[0]}\n` +
+    `② ${todayBonus.steps[1]}\n` +
+    `③ ${todayBonus.steps[2]}`;
+
+  // 保存
+  writeSaved(currentState());
 
   $("outputCard").scrollIntoView({ behavior:"smooth", block:"start" });
 }
@@ -233,42 +193,26 @@ function handleClear(){
   $("time").value = "unknown";
   $("tone").value = "normal";
 
-  $("badgeFace").textContent = "-";
-  $("badgeCore").textContent = "-";
-  $("badgeNum").textContent = "-";
-
-  $("typeTitle").textContent = "タイプ：-";
+  $("typeTitle").textContent = "-";
   $("typeDesc").textContent = "生年月日を入れて「生成」を押してね。";
-  $("typeMeta").textContent = "-";
 
   $("out").value = "";
-  $("devout").value = "";
+  $("todaySteps").textContent = "";
 
-  // 保存も削除
   clearSaved();
 }
 
-function wireAutoSave(){
-  const ids = ["name","dob","place","time","tone"];
-  for (const id of ids){
-    $(id).addEventListener("input", scheduleSave);
-    $(id).addEventListener("change", scheduleSave);
-  }
-}
-
+/* ====== init ====== */
 (function init(){
   initSelect("place", PREFECTURES);
   initSelect("time", TIME_BLOCKS, x=>x.value, x=>x.label);
 
-  // 保存データを復元
-  applyFormState(readSaved());
-
+  applyState(readSaved());
   wireAutoSave();
 
   $("gen").addEventListener("click", handleGenerate);
   $("copy").addEventListener("click", handleCopy);
   $("clear").addEventListener("click", handleClear);
 
-  // 初回も保存（空でもOK）
-  writeSaved(currentFormState());
+  writeSaved(currentState());
 })();
