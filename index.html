@@ -1,36 +1,99 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>クマ占い</title>
-  <link rel="stylesheet" href="css/style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>クマ占いジェネレーター</title>
+  <link rel="stylesheet" href="css/style.css" />
 </head>
+
 <body>
+  <main class="wrap">
+    <header class="head">
+      <h1>クマ占い</h1>
+      <p class="sub">ふわふわ見えて、裏ではちゃんとロジックで出してるやつ。</p>
+    </header>
 
-<div class="app">
+    <section class="grid">
+      <!-- 入力 -->
+      <div class="card">
+        <h2 class="cap">入力</h2>
 
-  <h1>🐻 クマ占い</h1>
+        <label>名前</label>
+        <input id="name" placeholder="山田 太郎" />
 
-  <div class="panel">
-    <input id="name" placeholder="山田 太郎">
-    <input type="date" id="dob">
+        <label>生年月日</label>
+        <input id="dob" type="date" />
 
-    <select id="tone">
-      <option value="soft">やさしめ</option>
-      <option value="normal">標準</option>
-      <option value="spicy">毒舌</option>
-    </select>
+        <div class="row2">
+          <div>
+            <label>出生地（都道府県）</label>
+            <select id="pref"></select>
+          </div>
+          <div>
+            <label>出生時間（だいたい）</label>
+            <select id="timeblock">
+              <option value="unknown">不明</option>
+              <option value="morning">朝（5〜10時）</option>
+              <option value="day">昼（10〜17時）</option>
+              <option value="evening">夕（17〜21時）</option>
+              <option value="night">夜（21〜2時）</option>
+              <option value="late">深夜（2〜5時）</option>
+            </select>
+          </div>
+        </div>
 
-    <button id="generate">占う</button>
-  </div>
+        <label>鑑定スタイル</label>
+        <select id="tone">
+          <option value="soft">やさしめ</option>
+          <option value="normal">標準</option>
+          <option value="spicy">毒舌</option>
+        </select>
 
-  <pre id="result"></pre>
+        <div class="btns">
+          <button class="primary" id="gen">出力</button>
+          <button class="ghost" id="copy">コピー</button>
+          <button class="ghost" id="clear">クリア</button>
+        </div>
 
-</div>
+        <p class="mini">※入力は端末に保存されるよ（あなたのブラウザ内）。</p>
+      </div>
 
-<script src="js/data.js"></script>
-<script src="js/utils.js"></script>
-<script src="js/fortune.js"></script>
-<script src="js/app.js"></script>
+      <!-- 出力 -->
+      <div class="card">
+        <h2 class="cap">結果</h2>
+
+        <div class="badges">
+          <span class="badge" id="bType">タイプ：-</span>
+          <span class="badge" id="bSign">星座：-</span>
+          <span class="badge" id="bLP">数秘：-</span>
+        </div>
+
+        <div class="typeBox" id="typeBox" hidden>
+          <div class="typeName" id="typeName"></div>
+          <div class="typeDesc" id="typeDesc"></div>
+          <!-- イラスト差し替え用（あとで assets/illust に置けばOK） -->
+          <img id="typeImg" class="typeImg" alt="" hidden>
+        </div>
+
+        <label class="mt">本文</label>
+        <textarea id="out" readonly></textarea>
+
+        <details class="steps" id="stepsBox" hidden>
+          <summary>今日の3ステップ（タップで開く）</summary>
+          <ol id="stepsList"></ol>
+        </details>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <small>Version 3.1</small>
+    </footer>
+  </main>
+
+  <script src="js/data.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/fortune.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
