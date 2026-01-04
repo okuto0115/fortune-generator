@@ -1,10 +1,9 @@
 /*
-  app.js / Version 1.3
+  app.js / Version 1.4
   ------------------------------------------------------------
-  ✅ UI操作（入力→出力）
-  ✅ 出生地/出生時間はプルダウン
-  ✅ 出生時間が不明でも「月」は候補で出す（嘘をつかない）
-  ✅ todayStr を fortune.js に渡す（今日のひとことを固定化するため）
+  ✅ 入力内容をセッション越えで保持（localStorage）
+  ✅ フォーム変更時に自動保存
+  ✅ クリアで保存も削除
 */
 
 import {
@@ -16,7 +15,6 @@ import {
 
 import { lifePath, typeKeyFrom, buildTexts, TEXT_DB } from "./fortune.js";
 
-/* 都道府県 */
 const PREFECTURES = [
   "都道府県",
   "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
@@ -29,7 +27,6 @@ const PREFECTURES = [
   "福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"
 ];
 
-/* 出生時間（不明が多い前提：ブロック選択） */
 const TIME_BLOCKS = [
   { value:"unknown", label:"不明", hour:12, min:0 },
   { value:"early",   label:"早朝（5–8）", hour:6,  min:30 },
@@ -42,6 +39,54 @@ const TIME_BLOCKS = [
 
 const $ = (id)=>document.getElementById(id);
 
+/* ===== localStorage（入力保持）===== */
+const STORAGE_KEY = "kuma_fortune_form_v14";
+
+function readSaved(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch{
+    return null;
+  }
+}
+function writeSaved(obj){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+  }catch{}
+}
+function clearSaved(){
+  try{ localStorage.removeItem(STORAGE_KEY); }catch{}
+}
+
+function currentFormState(){
+  return {
+    name: $("name").value ?? "",
+    dob: $("dob").value ?? "",
+    place: $("place").value ?? "都道府県",
+    time: $("time").value ?? "unknown",
+    tone: $("tone").value ?? "normal",
+  };
+}
+function applyFormState(st){
+  if (!st) return;
+  if (typeof st.name === "string") $("name").value = st.name;
+  if (typeof st.dob === "string") $("dob").value = st.dob;
+  if (typeof st.place === "string") $("place").value = st.place;
+  if (typeof st.time === "string") $("time").value = st.time;
+  if (typeof st.tone === "string") $("tone").value = st.tone;
+}
+
+// 保存の頻度を落とす（入力のたびに保存でもOKだけど、軽くデバウンス）
+let saveTimer = null;
+function scheduleSave(){
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    writeSaved(currentFormState());
+  }, 150);
+}
+
+/* ===== select初期化 ===== */
 function initSelect(id, items, getValue=(x)=>x, getLabel=(x)=>x){
   const el = $(id);
   el.innerHTML = "";
@@ -58,32 +103,24 @@ function getSelectedTime(){
   return TIME_BLOCKS.find(x=>x.value===v) ?? TIME_BLOCKS[0];
 }
 
-/*
-  月の扱い：
-  - 時間が分かる：代表時刻で確定
-  - 不明：その日の00:00と23:59で星座が変わるなら候補表示
-*/
 function moonInfo(dobStr, timeObj){
   if (timeObj.value !== "unknown"){
     const dateUTC = makeDateUTCFromJST(dobStr, timeObj.hour, timeObj.min);
     const lon = moonEclipticLongitude(dateUTC);
     return { info: lonToSign(lon), lon };
   }
-
   const d0 = makeDateUTCFromJST(dobStr, 0, 0);
   const d1 = makeDateUTCFromJST(dobStr, 23, 59);
   const lon0 = moonEclipticLongitude(d0);
   const lon1 = moonEclipticLongitude(d1);
   const s0 = lonToSign(lon0);
   const s1 = lonToSign(lon1);
-
   if (s0 === s1){
     return { info: s0, lon:(lon0+lon1)/2, boundary:false };
   }
   return { info: `候補：${s0} / ${s1}（出生時間で確定）`, lon:lon0, boundary:true };
 }
 
-/* 表示用バッジ（専門用語を出さないラベル） */
 function setBadges({ sunSign, moonSignInfo, lp }){
   const face = TEXT_DB.faceLabel[sunSign] ?? "-";
   const core = moonSignInfo.includes("候補")
@@ -128,7 +165,6 @@ function handleGenerate(){
   const timeObj = getSelectedTime();
   const timeLabel = timeObj.label;
 
-  // 出生情報：太陽・惑星は「その日のお昼」を代表で使う（安定）
   const birthUTC = makeDateUTCFromJST(dobStr, 12, 0);
 
   const sunLon = sunEclipticLongitude(birthUTC);
@@ -148,10 +184,8 @@ function handleGenerate(){
   const lp = lifePath(dobStr);
   const typeKey = typeKeyFrom(sunSign, lp);
 
-  // 今日（トランジット）
   const today = todayTransitSigns();
 
-  // 角度（アスペクト用）
   const lons = {
     sun: sunLon,
     moon: moon.lon,
@@ -169,7 +203,7 @@ function handleGenerate(){
     mercurySign, venusSign, marsSign,
     lp, typeKey,
     todaySigns: { sun: today.sun, moon: today.moon, mars: today.mars },
-    todayStr: today.todayStr, // ★ Version 1.3：ここ重要
+    todayStr: today.todayStr,
     lons
   });
 
@@ -178,6 +212,9 @@ function handleGenerate(){
 
   $("out").value = result.publicText;
   $("devout").value = result.devText;
+
+  // 生成したタイミングでも保存（最新に）
+  writeSaved(currentFormState());
 
   $("outputCard").scrollIntoView({ behavior:"smooth", block:"start" });
 }
@@ -206,13 +243,32 @@ function handleClear(){
 
   $("out").value = "";
   $("devout").value = "";
+
+  // 保存も削除
+  clearSaved();
+}
+
+function wireAutoSave(){
+  const ids = ["name","dob","place","time","tone"];
+  for (const id of ids){
+    $(id).addEventListener("input", scheduleSave);
+    $(id).addEventListener("change", scheduleSave);
+  }
 }
 
 (function init(){
   initSelect("place", PREFECTURES);
   initSelect("time", TIME_BLOCKS, x=>x.value, x=>x.label);
 
+  // 保存データを復元
+  applyFormState(readSaved());
+
+  wireAutoSave();
+
   $("gen").addEventListener("click", handleGenerate);
   $("copy").addEventListener("click", handleCopy);
   $("clear").addEventListener("click", handleClear);
+
+  // 初回も保存（空でもOK）
+  writeSaved(currentFormState());
 })();
