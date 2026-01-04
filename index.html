@@ -121,5 +121,37 @@
   <script src="./js/fortune.js"></script>
   <script src="./js/app.js"></script>
 
+
+
+
+
+  <script>
+  console.log("TEST: scripts loaded?");
+  console.log("PREFS length:", window.PREFS ? window.PREFS.length : "PREFS is undefined");
+  console.log("HOURS length:", window.HOURS ? window.HOURS.length : "HOURS is undefined");
+  console.log("Utils exists:", !!window.Utils);
+
+  // 強制的に都道府県と時を入れる（これで出ないならDOMかパスが原因）
+  (function forceFill(){
+    const pref = document.getElementById("pref");
+    const hour = document.getElementById("timeHour");
+    if (!pref || !hour) {
+      console.log("pref/timeHour element missing", { pref, hour });
+      return;
+    }
+
+    const prefs = window.PREFS || [];
+    const hours = window.HOURS || [];
+
+    pref.innerHTML = `<option value="">選択してね</option>` + prefs.map(p => `<option>${p}</option>`).join("");
+    hour.innerHTML = `<option value="">選択</option>` + hours.map(h => `<option>${h}</option>`).join("");
+
+    console.log("forceFill done.", { prefs: prefs.length, hours: hours.length });
+  })();
+</script>
+
+  
+
+  
 </body>
 </html>
