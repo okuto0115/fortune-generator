@@ -1,15 +1,20 @@
-/* =========================================================
-  fortune.js / Version 1
-  目的：いろんな要素を “混ぜて1つの答え” にする
+/*
+  Version 10 (internal memo)
+  ==========================
+  このファイルは「占いロジックの根幹」。
+  初心者が不用意にいじると崩れやすいので、基本ここは固定運用推奨。
 
-  開発者メモ（表には出さない）：
-  - 出生時間不明でも成立する占星術範囲に絞る（ハウス/ASCは未使用）
-  - 西洋占星術：太陽星座・月星座（簡易）・惑星サイン（簡易）・要素バランス
-  - 数秘：ライフパス / パーソナルイヤー
-  - 出生地：地域補正（日本の生活テンポ補正）
-  - 名前：文字数/母音/空気感（軽量）
-  - それぞれを同じ “4軸スコア” に翻訳して統合する
-========================================================= */
+  目的：
+  - “複数要素”を混ぜて、1つの結論（統合スコア）に落とし込む
+  - 出生時間が不明でも成立する範囲に寄せる（ハウス/ASCは未使用）
+  - 専門用語は表に出さない（内部スコア → 出力は自然文）
+
+  入力：
+  - dobStr: 生年月日（必須）
+  - pref: 都道府県（任意）
+  - time: "不明" or "HH:MM"（任意）
+  - name/kana: 名前とふりがな（任意、kanaがあると名前補正が効く）
+*/
 
 import { hashString, mulberry32, clamp } from "./utils.js";
 import { TYPES } from "./data.js";
@@ -47,10 +52,9 @@ function signFromMonthDay(m, d){
 }
 
 function approxMoonSign(date){
-  // 開発者メモ：
-  // 本格月計算は重いので、出生時間なしでも破綻しにくい簡易版
-  // 29.53日周期でサインを回す（ざっくり）
-  const base = new Date("2000-01-06T00:00:00Z"); // 新月近辺の基準（目安）
+  // 月星座（超簡易）
+  // 本格月計算は重い＆出生時間がないとブレるので、破綻しにくい軽量版にする
+  const base = new Date("2000-01-06T00:00:00Z");
   const days = (date.getTime() - base.getTime()) / 86400000;
   const phase = ((days % 29.530588) + 29.530588) % 29.530588;
   const signIndex = Math.floor((phase / 29.530588) * 12);
@@ -70,6 +74,7 @@ function elementBias(sign){
 /* ---------------------------
   数秘
 --------------------------- */
+
 function lifePathNumber(date){
   const y = String(date.getFullYear());
   const m = String(date.getMonth()+1).padStart(2,"0");
@@ -82,7 +87,6 @@ function lifePathNumber(date){
 }
 
 function personalYear(date, yearNow){
-  // ざっくり：誕生日（MMDD）＋年（YYYY）の合算
   const mm = date.getMonth()+1;
   const dd = date.getDate();
   const s = String(yearNow) + String(mm) + String(dd);
@@ -93,7 +97,7 @@ function personalYear(date, yearNow){
 }
 
 function numerologyBias(lp){
-  // “意味がぶれにくい”だけ補正（控えめ）
+  // 控えめ（強くしすぎると破綻する）
   const map = {
     1: {WORK:+8, LOVE:+1, MONEY:+3, LIFE:+1},
     2: {WORK:+2, LOVE:+8, MONEY:+1, LIFE:+3},
@@ -109,7 +113,7 @@ function numerologyBias(lp){
 }
 
 function yearBias(py){
-  // 今年の空気（出しすぎると“今日運勢”に寄るので控えめ）
+  // “今年感”は出しすぎると今日運勢に寄るので控えめ
   const map = {
     1:{WORK:+3,LOVE:0,MONEY:+1,LIFE:0},
     2:{WORK:0,LOVE:+2,MONEY:0,LIFE:+1},
@@ -127,6 +131,7 @@ function yearBias(py){
 /* ---------------------------
   出生地（都道府県）補正
 --------------------------- */
+
 function regionOf(pref){
   if (!pref || pref==="未選択") return "unknown";
   const HOKKAIDO_TOHOKU = ["北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県"];
@@ -148,60 +153,47 @@ function regionOf(pref){
 function placeBias(pref){
   const r = regionOf(pref);
   const map = {
-    north: {WORK:+2, LOVE:+1, MONEY:+1, LIFE:+4}, // 基盤寄り
-    kanto: {WORK:+4, LOVE:0,  MONEY:+3, LIFE:0}, // 競争/速度
-    chubu: {WORK:+3, LOVE:0,  MONEY:+2, LIFE:+2},// 堅実
-    kinki: {WORK:+1, LOVE:+3, MONEY:+1, LIFE:0}, // 対人/表現
-    west:  {WORK:+2, LOVE:+1, MONEY:+1, LIFE:+1},// 調整
-    south: {WORK:+1, LOVE:+3, MONEY:0,  LIFE:+2},// 情/縁
-    unknown:{WORK:0,LOVE:0,MONEY:0,LIFE:0}
+    north:  {WORK:+2, LOVE:+1, MONEY:+1, LIFE:+4},
+    kanto:  {WORK:+4, LOVE:0,  MONEY:+3, LIFE:0},
+    chubu:  {WORK:+3, LOVE:0,  MONEY:+2, LIFE:+2},
+    kinki:  {WORK:+1, LOVE:+3, MONEY:+1, LIFE:0},
+    west:   {WORK:+2, LOVE:+1, MONEY:+1, LIFE:+1},
+    south:  {WORK:+1, LOVE:+3, MONEY:0,  LIFE:+2},
+    unknown:{WORK:0,  LOVE:0,  MONEY:0,  LIFE:0}
   };
   return map[r] ?? map.unknown;
 }
 
 /* ---------------------------
-  名前（軽量）補正
+  名前（kana優先の軽量補正）
 --------------------------- */
-function romanizeRough(name){
-  // 開発者メモ：厳密ローマ字は不要。母音比率の“雰囲気”を見るだけ
-  // 日本語以外でも最低限動くように英字だけ抽出
-  return (name || "")
-    .toLowerCase()
-    .replace(/[^a-z]/g,"");
-}
 
-function vowelScore(roman){
-  let a=0,i=0,u=0,e=0,o=0;
-  for (const ch of roman){
-    if (ch==="a") a++;
-    if (ch==="i") i++;
-    if (ch==="u") u++;
-    if (ch==="e") e++;
-    if (ch==="o") o++;
-  }
-  const total = a+i+u+e+o;
-  if (total===0) return {a:0,i:0,u:0,e:0,o:0};
-  return { a:a/total, i:i/total, u:u/total, e:e/total, o:o/total };
-}
-
-function nameBias(name){
-  const s = (name || "").replace(/\s/g,"");
+function nameBias(nameLike){
+  // ひらがな入力があると補正が効く
+  // ただし強くしすぎると占いが崩れるので“控えめ”
+  const name = nameLike || "";
+  const s = name.replace(/\s/g,"");
   const len = s.length;
-  const roman = romanizeRough(name);
-  const v = vowelScore(roman);
 
-  // 控えめ補正（強すぎると占いが崩れるので）
   const bias = {WORK:0,LOVE:0,MONEY:0,LIFE:0};
 
-  // 文字数：短いほど機動力、長いほど安定…くらいの軽さ
+  // 文字数だけでも軽く効かせる（漢字でも効果ゼロにならない）
   if (len >= 6) { bias.LIFE += 2; bias.WORK += 1; }
   if (len <= 3 && len > 0) { bias.WORK += 2; }
 
-  // 母音：雰囲気補正
-  bias.LOVE += Math.round(v.o * 3 + v.e * 2);
-  bias.WORK += Math.round(v.i * 3 + v.a * 1);
-  bias.LIFE += Math.round(v.u * 2);
-  // MONEY は直接は触りすぎない（崩れやすいので）
+  // ひらがな母音的補正（超ライト）
+  const a = (s.match(/あ/g)||[]).length;
+  const i = (s.match(/い/g)||[]).length;
+  const u = (s.match(/う/g)||[]).length;
+  const e = (s.match(/え/g)||[]).length;
+  const o = (s.match(/お/g)||[]).length;
+  const total = a+i+u+e+o;
+
+  if (total > 0){
+    bias.LOVE += Math.round((o+e) * 0.8);
+    bias.WORK += Math.round((i+a) * 0.6);
+    bias.LIFE += Math.round(u * 0.6);
+  }
   return bias;
 }
 
@@ -217,7 +209,6 @@ function mergeScores(...list){
     s.MONEY += x.MONEY||0;
     s.LIFE += x.LIFE||0;
   }
-  // 0..100に寄せる（見た目用）
   const base = {WORK:50,LOVE:50,MONEY:50,LIFE:50};
   return {
     WORK: clamp(base.WORK + s.WORK, 0, 100),
@@ -229,18 +220,17 @@ function mergeScores(...list){
 
 function axisLabel(profile){
   const entries = Object.entries(profile).sort((a,b)=>b[1]-a[1]);
-  const [top, topV] = entries[0];
-  const [sec, secV] = entries[1];
+  const [top] = entries[0];
+  const [sec] = entries[1];
   return `${top}優勢（次点：${sec}）`;
 }
 
 function pickTypeKey(profile, seed){
-  // 20タイプへ安定割り当て（スコア×seedで散らす）
-  // 開発者メモ：同スコア帯が偏らないように、top2軸＋seedで決める
-  const order = Object.entries(profile).sort((a,b)=>b[1]-a[1]).map(x=>x[0]); // ["WORK","LIFE",...]
+  const order = Object.entries(profile).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
   const top = order[0];
   const second = order[1];
 
+  // top2軸→タイプ候補。seedで分散。
   const map = {
     "WORK|LIFE": ["t01","t03","t15","t19"],
     "WORK|MONEY":["t16","t05","t03","t15"],
@@ -263,7 +253,6 @@ function pickTypeKey(profile, seed){
 }
 
 function estimateLevel(pref, time){
-  // 表示用：出生地/時間の入力があるほど“補助情報あり”にする（精度そのものを誤魔化さない表現）
   const hasPref = pref && pref !== "未選択";
   const hasTime = time && time !== "不明";
   if (hasPref && hasTime) return "補助情報あり（拡張向け）";
@@ -276,7 +265,7 @@ function estimateLevel(pref, time){
   外部公開API
 =========================== */
 
-export function buildFortune({ name, dobStr, pref, time, yearNow }){
+export function buildFortune({ name, kana, dobStr, pref, time, yearNow }){
   const birth = new Date(dobStr);
   const m = birth.getMonth()+1;
   const d = birth.getDate();
@@ -287,7 +276,9 @@ export function buildFortune({ name, dobStr, pref, time, yearNow }){
   const lp = lifePathNumber(birth);
   const py = personalYear(birth, yearNow);
 
-  const seed = hashString(`${dobStr}|${pref||""}|${(name||"").toLowerCase()}`);
+  const seed = hashString(`${dobStr}|${pref||""}|${(name||"").toLowerCase()}|${(kana||"").toLowerCase()}`);
+
+  const nameSource = (kana && kana.trim()) ? kana : name;
 
   const score = mergeScores(
     elementBias(sun),
@@ -295,7 +286,7 @@ export function buildFortune({ name, dobStr, pref, time, yearNow }){
     numerologyBias(lp),
     yearBias(py),
     placeBias(pref),
-    nameBias(name)
+    nameBias(nameSource)
   );
 
   const typeKey = pickTypeKey(score, seed);
