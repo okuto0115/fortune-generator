@@ -2,231 +2,625 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>占いジェネレーター</title>
   <style>
-    body { font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; margin: 24px; line-height: 1.7; }
-    .wrap { max-width: 900px; margin: 0 auto; }
-    h1 { font-size: 20px; margin: 0 0 16px; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 12px 0; }
-    label { display:block; font-size: 13px; margin: 10px 0 4px; }
-    input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px; font-size: 14px; }
-    .row { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .btns { display:flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
-    button { padding: 10px 14px; border: 0; border-radius: 10px; cursor: pointer; font-size: 14px; }
-    button.primary { background: #111; color: #fff; }
-    button.ghost { background: #f3f3f3; }
-    textarea { width: 100%; min-height: 420px; padding: 12px; border: 1px solid #ccc; border-radius: 12px; font-size: 13px; white-space: pre-wrap; }
-    .note { color:#666; font-size:12px; }
+    /* ==========
+      ここだけ触ればデザイン変更できる（初心者向け）
+    ========== */
+    :root{
+      --bg: #0b0b0f;
+      --card: #11111a;
+      --text: #f3f3f7;
+      --muted: #b7b7c6;
+      --line: rgba(255,255,255,.12);
+      --accent: #8ab4ff;
+
+      --radius: 14px;
+      --pad: 16px;
+      --gap: 12px;
+
+      --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Noto Sans Mono", monospace;
+    }
+
+    body{
+      margin: 0;
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(138,180,255,.18), transparent 55%),
+                  radial-gradient(900px 500px at 90% 10%, rgba(255,140,180,.12), transparent 55%),
+                  var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.7;
+    }
+
+    .wrap{ max-width: 980px; margin: 0 auto; padding: 24px; }
+    header{ display:flex; flex-direction:column; gap: 6px; margin-bottom: 16px; }
+    h1{ font-size: 20px; margin: 0; }
+    .sub{ color: var(--muted); font-size: 13px; margin: 0; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: var(--gap);
+    }
+    @media (min-width: 900px){
+      .grid{ grid-template-columns: 360px 1fr; align-items:start; }
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.04), transparent 42%),
+                  var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: var(--pad);
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+
+    .sectionTitle{ font-size: 13px; color: var(--muted); margin: 0 0 10px; letter-spacing: .02em; }
+
+    label{ display:block; font-size: 12px; color: var(--muted); margin: 10px 0 6px; }
+    input, select{
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      outline: none;
+      font-size: 14px;
+    }
+    input::placeholder{ color: rgba(255,255,255,.35); }
+
+    .row2{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btns{ display:flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+
+    button{
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button.primary{
+      background: var(--accent);
+      border-color: transparent;
+      color: #09101d;
+      font-weight: 700;
+    }
+    button:active{ transform: translateY(1px); }
+
+    .hint{ font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+
+    textarea{
+      width:100%;
+      min-height: 560px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color: var(--text);
+      padding: 12px;
+      font-family: var(--mono);
+      font-size: 13px;
+      white-space: pre-wrap;
+      line-height: 1.65;
+    }
+
+    .mini{ font-size: 12px; color: var(--muted); }
+    .pill{
+      display:inline-block;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-right: 6px;
+      background: rgba(255,255,255,.03);
+    }
   </style>
 </head>
+
 <body>
-<div class="wrap">
-  <h1>占いジェネレーター（HTML/JSだけ）</h1>
+  <div class="wrap">
+    <header>
+      <h1>占いジェネレーター</h1>
+      <p class="sub">万人向け・改変しやすいテンプレ版（HTML/JSだけで動作）</p>
+    </header>
 
-  <div class="card">
-    <div class="row">
-      <div>
+    <div class="grid">
+      <!-- 左：入力 -->
+      <div class="card">
+        <p class="sectionTitle">入力</p>
+
         <label>名前</label>
-        <input id="name" placeholder="例：平山 海斗" />
-      </div>
-      <div>
-        <label>出生地（都道府県など）</label>
-        <input id="place" placeholder="例：福岡県" />
-      </div>
-    </div>
+        <input id="name" placeholder="例：平山 海斗 / 宮崎 恭平" />
 
-    <div class="row">
-      <div>
         <label>生年月日</label>
         <input id="dob" type="date" />
+
+        <div class="row2">
+          <div>
+            <label>出生地</label>
+            <input id="place" placeholder="例：福岡県" />
+          </div>
+          <div>
+            <label>出生時間（任意）</label>
+            <input id="time" placeholder="例：23:30頃 / 不明" />
+          </div>
+        </div>
+
+        <label>鑑定スタイル（文章の雰囲気）</label>
+        <select id="tone">
+          <option value="soft">やさしめ</option>
+          <option value="clear">はっきり</option>
+          <option value="biz">仕事寄り</option>
+        </select>
+
+        <div class="btns">
+          <button class="primary" id="gen">生成</button>
+          <button id="copy">コピー</button>
+          <button id="clear">クリア</button>
+        </div>
+
+        <p class="hint">
+          改変ポイントは「SCRIPT内の CONFIG / TEXT_DB」。<br>
+          文言やセクション構成をそこだけ触れば変えられる。
+        </p>
       </div>
-      <div>
-        <label>出生時間（任意）</label>
-        <input id="time" placeholder="例：23:30頃 / 不明" />
+
+      <!-- 右：出力 -->
+      <div class="card">
+        <p class="sectionTitle">出力</p>
+        <div class="mini">
+          <span class="pill">星座</span><span id="badgeSign">-</span>
+          <span class="pill">数秘</span><span id="badgeLP">-</span>
+          <span class="pill">年齢</span><span id="badgeAge">-</span>
+        </div>
+        <label style="margin-top:10px;">結果テキスト</label>
+        <textarea id="out" readonly></textarea>
+        <p class="hint">※本格占星術（天体計算）や四柱推命の厳密計算は未搭載。必要なら次段階で拡張できる。</p>
       </div>
     </div>
-
-    <div class="btns">
-      <button class="primary" id="gen">占いを生成</button>
-      <button class="ghost" id="copy">結果をコピー</button>
-      <button class="ghost" id="clear">クリア</button>
-    </div>
-
-    <p class="note">
-      ※これは「鑑定文テンプレ＋一部（数秘）自動計算」で整形する簡易ジェネレーター。<br>
-      本格的な天体計算・干支の厳密計算は別途ライブラリ/APIが必要。
-    </p>
   </div>
-
-  <div class="card">
-    <label>生成結果</label>
-    <textarea id="out" readonly></textarea>
-  </div>
-</div>
 
 <script>
-  // --- ユーティリティ ---
-  const pad2 = (n) => String(n).padStart(2, "0");
+/* =========================================================================
+  0) ここが“改変しやすい”中枢：文章DBと設定
+============================================================================ */
 
-  function calcLifePathNumber(dateObj) {
-    // 生年月日（YYYY-MM-DD）から数秘（1〜9）を作る簡易版
-    // 例：1996-01-15 -> 1+9+9+6+0+1+1+5 = 32 -> 3+2 = 5
-    const s = `${dateObj.getFullYear()}${pad2(dateObj.getMonth()+1)}${pad2(dateObj.getDate())}`;
-    let sum = 0;
-    for (const ch of s) sum += Number(ch);
-    while (sum > 9) {
-      sum = String(sum).split("").reduce((a,c)=>a+Number(c),0);
+// セクションの並び（自由に入れ替え可）
+const CONFIG = {
+  sections: [
+    "social",    // 社会キャラ
+    "overall",   // 全体運
+    "work",      // 仕事
+    "money",     // お金
+    "health",    // 健康
+    "love",      // 恋愛
+    "turning",   // 転換点
+    "final"      // 最終評価
+  ],
+  yearNow: 2026, // 今の年（固定でOK / 動的にするなら new Date().getFullYear()）
+};
+
+// 文言データベース：ここを差し替えるだけで“サイトの占い”が変わる
+// ・tone（soft/clear/biz）で言い回しが変わる
+// ・星座と数秘で「タイプ」を選び、文章をはめ込む
+const TEXT_DB = {
+  tones: {
+    soft: {
+      header: "この鑑定は、星座・数秘・（任意の）出生情報をもとに、傾向としてまとめたものです。",
+      footer: "占いは“使うもの”。今日できる一歩に落とし込むほど、現実が動きやすくなります。"
+    },
+    clear: {
+      header: "この鑑定は、星座・数秘・（任意の）出生情報から、傾向を整理したものです。",
+      footer: "占いは決定表ではなく地図。合う行動を選べば、結果は変えられます。"
+    },
+    biz: {
+      header: "この鑑定は、星座・数秘・（任意の）出生情報をもとに、行動指針に落としたものです。",
+      footer: "運勢＝環境×選択×継続。再現性のある動き方に寄せるほど、成果が出やすくなります。"
     }
-    return sum; // 1-9
-  }
+  },
 
-  function lifePathKeywords(n) {
-    // 雰囲気づけ用（短く）
-    const map = {
-      1: "始動・自立",
-      2: "調和・協調",
-      3: "表現・拡散",
-      4: "基盤・継続",
-      5: "変化・挑戦",
-      6: "愛情・責任",
-      7: "探求・内省",
-      8: "達成・拡大",
-      9: "完成・手放し"
-    };
-    return map[n] ?? "";
-  }
+  // 星座の特徴（短文：改変しやすい）
+  signs: {
+    "山羊座": { vibe: "堅実・長期志向・積み上げ" },
+    "水瓶座": { vibe: "独自性・改革・発想" },
+    "魚座":   { vibe: "共感・感性・流れ" },
+    "牡羊座": { vibe: "始動・直感・突破" },
+    "牡牛座": { vibe: "安定・価値・持久力" },
+    "双子座": { vibe: "情報・拡散・柔軟" },
+    "蟹座":   { vibe: "守る・育てる・つながり" },
+    "獅子座": { vibe: "表現・自信・中心" },
+    "乙女座": { vibe: "整理・改善・実務" },
+    "天秤座": { vibe: "調和・美意識・交渉" },
+    "蠍座":   { vibe: "集中・深掘り・本質" },
+    "射手座": { vibe: "冒険・拡大・探究" },
+  },
 
-  function buildReading({ name, place, dobStr, timeStr }) {
-    const date = new Date(dobStr);
-    const yyyy = date.getFullYear();
-    const mm = date.getMonth() + 1;
-    const dd = date.getDate();
+  // 数秘（ライフパス）の特徴（短文）
+  lifepath: {
+    1: "始動と自己決定",
+    2: "協調と調整",
+    3: "表現と発信",
+    4: "基盤と継続",
+    5: "変化と挑戦",
+    6: "愛情と責任",
+    7: "探求と内省",
+    8: "達成と拡大",
+    9: "完成と循環",
+  },
 
-    const lp = calcLifePathNumber(date);
-    const lpKey = lifePathKeywords(lp);
+  // “型”を3種だけ用意：万人向けに破綻しにくい
+  // ここを増やせば精度感も上がる
+  archetypes: {
+    A: {
+      name: "後半上昇・大器晩成",
+      social: {
+        title: "🧑‍🤝‍🧑 社会キャラ",
+        body: [
+          "第一印象は落ち着きと誠実さが出やすいタイプ。",
+          "派手に目立つより、信頼の積み重ねで評価が上がる。",
+          "距離が縮むほど面倒見が良く、自然とまとめ役になりやすい。"
+        ]
+      },
+      overall: {
+        title: "🌍 全体運",
+        body: [
+          "人生は後半ほど満足度が上がりやすい。",
+          "土台づくりの期間を丁寧に過ごすほど、後で大きく回収しやすい。",
+          "焦りよりも継続が運勢を強める。"
+        ]
+      },
+      work: {
+        title: "💼 仕事運",
+        body: [
+          "企画・表現・発信・プロデュース寄りで伸びやすい。",
+          "個人裁量が大きいほど力を出しやすく、積み上げ型で強くなる。",
+          "基礎を作ったあとに評価が追いつきやすい。"
+        ]
+      },
+      money: {
+        title: "💰 金運",
+        body: [
+          "波は出やすいが、回収力が強い。",
+          "管理（固定費・仕組み化）を整えるほど安定しやすい。",
+          "長期視点の蓄積と相性が良い。"
+        ]
+      },
+      health: {
+        title: "🫁 健康運",
+        body: [
+          "ストレスが溜まると神経・睡眠リズムに出やすい。",
+          "休養は“贅沢”ではなく運勢維持の要。",
+          "無理を溜めない設計にすると運が落ちにくい。"
+        ]
+      },
+      love: {
+        title: "❤️ 恋愛運",
+        body: [
+          "軽い恋より、人生を整える関係に縁が出やすい。",
+          "仕事や生活の安定と恋愛運が連動しやすい。",
+          "精神的に自立した相手と相性が良い。"
+        ]
+      },
+      turning: {
+        title: "🧭 流れの切り替わり",
+        body: [
+          "基礎工事 → 評価が見える → 安定拡張 → 完成、の順で強くなりやすい。",
+          "“一気に変える”より、“積んで効かせる”方が勝ちやすい。"
+        ]
+      },
+      final: {
+        title: "🕊 最終評価",
+        body: [
+          "静かに積み上げ、後半で大きく報われる配置。",
+          "最終的な人生満足度を高めやすいタイプ。"
+        ]
+      }
+    },
 
-    // ここが「テンプレ」部分：あなたの鑑定フォーマットに合わせて文章を固定できる
-    // さらに凝るなら、lpや月・日で文言の分岐を増やす
-    return `# 🔮 総合鑑定：**${name || "（名前未入力）"}**
+    B: {
+      name: "安定成長・堅実積み上げ",
+      social: {
+        title: "🧑‍🤝‍🧑 社会キャラ",
+        body: [
+          "穏やかで信頼されやすい印象が出やすい。",
+          "約束を守る・継続することで評価が固まる。",
+          "調整役・実務で頼られやすい。"
+        ]
+      },
+      overall: {
+        title: "🌍 全体運",
+        body: [
+          "大波乱は少なく、安定して積み上がりやすい。",
+          "生活基盤が整うほど運が強くなる。",
+          "長期的な安心感を作るのが得意。"
+        ]
+      },
+      work: {
+        title: "💼 仕事運",
+        body: [
+          "管理・調整・実務の軸で評価が上がる。",
+          "責任ある役割ほど信頼が積もる。",
+          "コツコツ型の成果が後で大きく効く。"
+        ]
+      },
+      money: {
+        title: "💰 金運",
+        body: [
+          "蓄積型で、守りが強い。",
+          "固定費の最適化が一番効く。",
+          "一攫千金より、堅実な増やし方が向く。"
+        ]
+      },
+      health: {
+        title: "🫁 健康運",
+        body: [
+          "疲労が睡眠に出やすい。",
+          "休むのが下手だと後で響くので、休養は仕組み化すると良い。",
+          "ルーティンが健康運を底上げする。"
+        ]
+      },
+      love: {
+        title: "❤️ 恋愛運",
+        body: [
+          "長期安定の恋愛に強い。",
+          "関係が育つほど安心感が増す。",
+          "家庭運が人生の基盤になりやすい。"
+        ]
+      },
+      turning: {
+        title: "🧭 流れの切り替わり",
+        body: [
+          "安定 → 役割増 → 信頼固定 → 生活完成、の順で良くなる。",
+          "大勝負より、良い習慣の積み上げが運を上げる。"
+        ]
+      },
+      final: {
+        title: "🕊 最終評価",
+        body: [
+          "長期的な安定と満足を作りやすい配置。",
+          "人生全体の安心感が増えていくタイプ。"
+        ]
+      }
+    },
 
-**生年月日**：${yyyy}/${pad2(mm)}/${pad2(dd)}
-**出生地**：${place || "（未入力）"}
-**出生時間**：${timeStr?.trim() ? timeStr.trim() : "不明"}
-**使用占術**：西洋占星術 × 数秘術 × 東洋占術 × 姓名エネルギー（簡易テンプレ）
-
----
-
-## 🧑‍🤝‍🧑 社会キャラ（名前から見る印象・対人運）
-
-**第一印象**
-・誠実
-・落ち着き
-・信頼感が強い
-
-**他人から見たキャラ**
-・頼られやすい
-・責任感がある
-・相談役になりやすい
-
-**人間関係のクセ**
-・距離が縮むほど面倒見が良い
-・表では冷静、内面は情熱的
-・自然とまとめ役に回る
-
-**社会的評価の出方**
-・派手ではないが、信用の積み重ねで評価が上がるタイプ
-
----
-
-## 🌍 全体運（人生構造）
-
-**大器晩成・後半上昇型**
-・人生後半ほど満足度が高い
-・土台が固まるほど運が伸びる
-
-（数秘：${lp}／${lpKey}）
-
----
-
-## 💼 仕事運
-
-**表現 × 企画 × 発信の命式**
-・自分の名前と世界観で仕事を築く
-・個人裁量の大きい働き方と相性が良い
-
-**運勢の流れ**
-・基礎工事 → 飛躍 → 安定拡張 → 経営フェーズ
-
----
-
-## 💰 金運
-
-**回収力の強い金運**
-・波はあるが最終的に回収できる
-・土台の整備が金運を守る
-
----
-
-## 🫁 健康運
-
-・ストレスが呼吸・神経系に出やすい
-・休養管理が最大の開運要素
-
----
-
-## ❤️ 恋愛運
-
-**人生連動型・本命集中タイプ**
-・仕事運と強く連動
-・精神的に自立した相手と好相性
-
----
-
-## 🧭 人生の主要転換点
-
-・基礎工事期：土台づくりが最優先
-・上昇期：評価が表に出る
-・完成期：自由と安定が同時に手に入る
-
----
-
-## 🕊 命式の最終評価
-
-> 静かに積み上げ、後半で大きく報われる人生構造
-`;
-  }
-
-  // --- イベント ---
-  const $ = (id) => document.getElementById(id);
-  $("gen").addEventListener("click", () => {
-    const name = $("name").value;
-    const place = $("place").value;
-    const dob = $("dob").value;
-    const time = $("time").value;
-
-    if (!dob) {
-      alert("生年月日を入力してね");
-      return;
+    C: {
+      name: "変化適応・挑戦で伸びる",
+      social: {
+        title: "🧑‍🤝‍🧑 社会キャラ",
+        body: [
+          "話題性・行動力が評価されやすい。",
+          "新しい場所で伸びるタイプ。",
+          "変化があるほど魅力が出る。"
+        ]
+      },
+      overall: {
+        title: "🌍 全体運",
+        body: [
+          "停滞より、変化で運が動く。",
+          "新規挑戦の数が未来を作りやすい。",
+          "柔軟な切り替えが強み。"
+        ]
+      },
+      work: {
+        title: "💼 仕事運",
+        body: [
+          "新規・企画・拡張に強い。",
+          "単調さより、変化のある環境が合う。",
+          "動きながら整えると成果が出やすい。"
+        ]
+      },
+      money: {
+        title: "💰 金運",
+        body: [
+          "収入源を複線化すると強い。",
+          "勢いで増えるが、管理が弱いと減りやすい。",
+          "仕組み化が安定の鍵。"
+        ]
+      },
+      health: {
+        title: "🫁 健康運",
+        body: [
+          "テンションの上下が体に出やすい。",
+          "睡眠と食事の固定が運の土台。",
+          "“休む日を決める”と安定する。"
+        ]
+      },
+      love: {
+        title: "❤️ 恋愛運",
+        body: [
+          "出会いが多く、動くほど縁が増える。",
+          "勢いで決めすぎない見極めが大事。",
+          "相手と未来設計できると強い。"
+        ]
+      },
+      turning: {
+        title: "🧭 流れの切り替わり",
+        body: [
+          "挑戦 → 適応 → 仕組み化 → 安定、の順で強くなる。",
+          "挑戦が止まると運も止まりやすい。"
+        ]
+      },
+      final: {
+        title: "🕊 最終評価",
+        body: [
+          "変化を味方につけるほど上がる配置。",
+          "挑戦の数が人生の厚みになるタイプ。"
+        ]
+      }
     }
+  }
+};
 
-    $("out").value = buildReading({ name, place, dobStr: dob, timeStr: time });
+/* =========================================================================
+  1) 計算系：数秘・星座・年齢
+============================================================================ */
+
+function calcLifePathNumber(dateObj) {
+  // YYYYMMDDの合計を1桁にする（簡易数秘）
+  const y = String(dateObj.getFullYear());
+  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const d = String(dateObj.getDate()).padStart(2, "0");
+  const s = y + m + d;
+
+  let sum = 0;
+  for (const ch of s) sum += Number(ch);
+  while (sum > 9) sum = String(sum).split("").reduce((a,c)=>a+Number(c),0);
+  return sum; // 1-9
+}
+
+function calcAge(dateObj, yearNow = CONFIG.yearNow) {
+  // yearNow の誕生日時点の年齢（ざっくり）
+  const today = new Date(yearNow, 0, 1);
+  let age = yearNow - dateObj.getFullYear();
+  const birthdayThisYear = new Date(yearNow, dateObj.getMonth(), dateObj.getDate());
+  if (today < birthdayThisYear) age -= 1;
+  return age;
+}
+
+function calcZodiacSign(dateObj) {
+  const m = dateObj.getMonth() + 1;
+  const d = dateObj.getDate();
+
+  // 西洋星座（太陽星座）の境界（一般的）
+  if ((m==1 && d>=20) || (m==2 && d<=18)) return "水瓶座";
+  if ((m==2 && d>=19) || (m==3 && d<=20)) return "魚座";
+  if ((m==3 && d>=21) || (m==4 && d<=19)) return "牡羊座";
+  if ((m==4 && d>=20) || (m==5 && d<=20)) return "牡牛座";
+  if ((m==5 && d>=21) || (m==6 && d<=21)) return "双子座";
+  if ((m==6 && d>=22) || (m==7 && d<=22)) return "蟹座";
+  if ((m==7 && d>=23) || (m==8 && d<=22)) return "獅子座";
+  if ((m==8 && d>=23) || (m==9 && d<=22)) return "乙女座";
+  if ((m==9 && d>=23) || (m==10 && d<=23)) return "天秤座";
+  if ((m==10 && d>=24) || (m==11 && d<=22)) return "蠍座";
+  if ((m==11 && d>=23) || (m==12 && d<=21)) return "射手座";
+  return "山羊座"; // (12/22-1/19)
+}
+
+/* =========================================================================
+  2) “型”の決定：万人向けに破綻しにくいルール
+     ※本格鑑定ではない。サイトの汎用性優先。
+============================================================================ */
+
+function pickArchetype({ sign, lifepath }) {
+  // ざっくりルール：
+  // ・4,8 は積み上げやすい → A or B
+  // ・5 は変化 → C
+  // ・7 は後半伸び → A
+  // ・山羊/乙女/牡牛 は堅実 → B寄り
+  // ・獅子/牡羊/射手 は動き → C寄り
+  if (lifepath === 5) return "C";
+  if (lifepath === 7) return "A";
+  if (["山羊座","乙女座","牡牛座"].includes(sign)) return (lifepath === 4 || lifepath === 8) ? "A" : "B";
+  if (["獅子座","牡羊座","射手座"].includes(sign)) return "C";
+  if (lifepath === 4 || lifepath === 8) return "A";
+  return "B";
+}
+
+/* =========================================================================
+  3) 出力生成：テキスト組み立て（初心者向けにシンプル）
+============================================================================ */
+
+function formatDateJP(dateObj) {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth()+1).padStart(2,"0");
+  const d = String(dateObj.getDate()).padStart(2,"0");
+  return `${y}/${m}/${d}`;
+}
+
+function joinLines(arr) {
+  return arr.map(s => `・${s}`).join("\n");
+}
+
+function buildReading({ name, place, dobStr, timeStr, tone }) {
+  const birth = new Date(dobStr);
+  const lp = calcLifePathNumber(birth);
+  const sign = calcZodiacSign(birth);
+  const age = calcAge(birth, CONFIG.yearNow);
+
+  const archKey = pickArchetype({ sign, lifepath: lp });
+  const arch = TEXT_DB.archetypes[archKey];
+
+  const tonePack = TEXT_DB.tones[tone] ?? TEXT_DB.tones.soft;
+  const signVibe = TEXT_DB.signs[sign]?.vibe ?? "";
+  const lpVibe = TEXT_DB.lifepath[lp] ?? "";
+
+  // バッジ表示
+  document.getElementById("badgeSign").textContent = `${sign}（${signVibe}）`;
+  document.getElementById("badgeLP").textContent = `${lp}（${lpVibe}）`;
+  document.getElementById("badgeAge").textContent = `${CONFIG.yearNow}年時点：${age}歳目安`;
+
+  const lines = [];
+  lines.push(`# 🔮 総合鑑定：**${(name || "（名前未入力）")}**`);
+  lines.push("");
+  lines.push(`生年月日：${formatDateJP(birth)}`);
+  lines.push(`出生地：${place || "（未入力）"}`);
+  lines.push(`出生時間：${(timeStr && timeStr.trim()) ? timeStr.trim() : "不明"}`);
+  lines.push(`星座：${sign}（${signVibe}）`);
+  lines.push(`数秘：${lp}（${lpVibe}）`);
+  lines.push(`鑑定タイプ：${arch.name}（テンプレ）`);
+  lines.push("");
+  lines.push(tonePack.header);
+  lines.push("");
+
+  // セクション出力（CONFIG.sections の順で）
+  for (const key of CONFIG.sections) {
+    const sec = arch[key];
+    if (!sec) continue;
+    lines.push(`## ${sec.title}`);
+    lines.push(joinLines(sec.body));
+    lines.push("");
+  }
+
+  lines.push(tonePack.footer);
+  return lines.join("\n");
+}
+
+/* =========================================================================
+  4) UI
+============================================================================ */
+
+const $ = (id) => document.getElementById(id);
+
+$("gen").addEventListener("click", () => {
+  const dob = $("dob").value;
+  if (!dob) {
+    alert("生年月日を入力してね");
+    return;
+  }
+
+  const result = buildReading({
+    name: $("name").value,
+    place: $("place").value,
+    dobStr: dob,
+    timeStr: $("time").value,
+    tone: $("tone").value
   });
 
-  $("copy").addEventListener("click", async () => {
-    const text = $("out").value;
-    if (!text.trim()) return alert("先に占いを生成してね");
-    await navigator.clipboard.writeText(text);
-    alert("コピーしたよ");
-  });
+  $("out").value = result;
+});
 
-  $("clear").addEventListener("click", () => {
-    $("name").value = "";
-    $("place").value = "";
-    $("dob").value = "";
-    $("time").value = "";
-    $("out").value = "";
-  });
+$("copy").addEventListener("click", async () => {
+  const text = $("out").value;
+  if (!text.trim()) return alert("先に生成してね");
+  await navigator.clipboard.writeText(text);
+  alert("コピーしたよ");
+});
+
+$("clear").addEventListener("click", () => {
+  $("name").value = "";
+  $("place").value = "";
+  $("dob").value = "";
+  $("time").value = "";
+  $("out").value = "";
+  $("badgeSign").textContent = "-";
+  $("badgeLP").textContent = "-";
+  $("badgeAge").textContent = "-";
+});
 </script>
 </body>
 </html>
