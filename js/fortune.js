@@ -1,421 +1,314 @@
-// js/fortune.js
-// ======================================================
-// 占いロジック（出生時間が不明でも破綻しないギリギリ）
-// - 太陽：安定
-// - 月：摂動入り（精度UP）
-// - アスペクト：出生時間なしでも有効（ガチ感が上がる）
-// - 月相：今日っぽい要素じゃなく「人生のリズム」の根拠に使える
-// - 20タイプ：占い結果から決まる（ランダムではない）
-// ======================================================
+/* =========================================================
+  fortune.js / Version 1
+  目的：いろんな要素を “混ぜて1つの答え” にする
 
-import {
-  sinD, cosD, atan2D, norm360, angDiff,
-  dateToJulianDay, jdToDayNumber,
-  lonToSign, isNearSignBoundary,
-  signToElement, calcLifePathNumber,
-} from "./utils.js";
+  開発者メモ（表には出さない）：
+  - 出生時間不明でも成立する占星術範囲に絞る（ハウス/ASCは未使用）
+  - 西洋占星術：太陽星座・月星座（簡易）・惑星サイン（簡易）・要素バランス
+  - 数秘：ライフパス / パーソナルイヤー
+  - 出生地：地域補正（日本の生活テンポ補正）
+  - 名前：文字数/母音/空気感（軽量）
+  - それぞれを同じ “4軸スコア” に翻訳して統合する
+========================================================= */
 
-// --------- 天文計算（Schlyter系の近似）---------
+import { hashString, mulberry32, clamp } from "./utils.js";
+import { TYPES } from "./data.js";
 
-function keplerE(M, e){
-  // M:deg -> E:deg
-  const Mr = M * Math.PI/180;
-  let E = Mr + e * Math.sin(Mr) * (1 + e * Math.cos(Mr));
-  for(let i=0;i<3;i++){
-    E = E - (E - e*Math.sin(E) - Mr) / (1 - e*Math.cos(E));
-  }
-  return E * 180/Math.PI;
-}
+/* ---------------------------
+  占星術（出生時間なしの範囲）
+--------------------------- */
 
-function eclRectFromOrbital(r, v, N, i, w){
-  const vw = v + w;
-  const x = r * ( cosD(N)*cosD(vw) - sinD(N)*sinD(vw)*cosD(i) );
-  const y = r * ( sinD(N)*cosD(vw) + cosD(N)*sinD(vw)*cosD(i) );
-  const z = r * ( sinD(vw)*sinD(i) );
-  return {x,y,z};
-}
-function lonLatFromRect({x,y,z}){
-  const lon = norm360(atan2D(y,x));
-  const lat = atan2D(z, Math.sqrt(x*x + y*y));
-  const r = Math.sqrt(x*x + y*y + z*z);
-  return { lon, lat, r };
-}
-
-// 太陽（地心黄経：十分安定）
-function sunPosition(d){
-  const w = norm360(282.9404 + 4.70935e-5 * d);
-  const e = 0.016709 - 1.151e-9 * d;
-  const M = norm360(356.0470 + 0.9856002585 * d);
-
-  const E = keplerE(M, e);
-  const x = cosD(E) - e;
-  const y = sinD(E) * Math.sqrt(1 - e*e);
-
-  const v = norm360(atan2D(y,x));
-  const lon = norm360(v + w);
-
-  // 平均黄経（摂動用の近似）
-  const Ls = norm360(w + M);
-
-  return { lon, M, Ls };
-}
-
-// 月（摂動入り：出生時間不明でも精度を稼ぐ）
-function moonPositionHighAccuracy(d, sun){
-  const N = norm360(125.1228 - 0.0529538083 * d);
-  const i = 5.1454;
-  const w = norm360(318.0634 + 0.1643573223 * d);
-  const a = 60.2666; // 地球半径
-  const e = 0.054900;
-  const M = norm360(115.3654 + 13.0649929509 * d);
-
-  const E = keplerE(M, e);
-  const x = a * (cosD(E) - e);
-  const y = a * (sinD(E) * Math.sqrt(1 - e*e));
-  let r = Math.sqrt(x*x + y*y);
-  const v = norm360(atan2D(y,x));
-
-  const rect = eclRectFromOrbital(r, v, N, i, w);
-  let { lon, lat } = lonLatFromRect(rect);
-
-  // --- 摂動引数 ---
-  const Ls = sun.Ls;
-  const Ms = sun.M;
-  const Lm = norm360(N + w + M); // 月の平均黄経
-  const Mm = M;
-  const D  = norm360(Lm - Ls);
-  const F  = norm360(Lm - N);
-
-  // 経度補正（deg）
-  const dLon =
-    -1.274 * sinD(Mm - 2*D) +
-    +0.658 * sinD(2*D) +
-    -0.186 * sinD(Ms) +
-    -0.059 * sinD(2*Mm - 2*D) +
-    -0.057 * sinD(Mm - 2*D + Ms) +
-    +0.053 * sinD(Mm + 2*D) +
-    +0.046 * sinD(2*D - Ms) +
-    +0.041 * sinD(Mm - Ms) +
-    -0.035 * sinD(D) +
-    -0.031 * sinD(Mm + Ms) +
-    -0.015 * sinD(2*F - 2*D) +
-    +0.011 * sinD(Mm - 4*D);
-
-  // 緯度補正（deg）
-  const dLat =
-    -0.173 * sinD(F - 2*D) +
-    -0.055 * sinD(Mm - F - 2*D) +
-    -0.046 * sinD(Mm + F - 2*D) +
-    +0.033 * sinD(F + 2*D) +
-    +0.017 * sinD(2*Mm + F);
-
-  // 距離補正（地球半径）
-  const dR =
-    -0.58 * cosD(Mm - 2*D) +
-    -0.46 * cosD(2*D);
-
-  lon = norm360(lon + dLon);
-  lat = lat + dLat;
-  r = r + dR;
-
-  return { lon, lat, r };
-}
-
-// 惑星（ここは「星座」「アスペクト」用途なら簡易で十分）
-const ORB = {
-  Mercury: (d)=>({
-    N: norm360(48.3313 + 3.24587e-5*d),
-    i: 7.0047 + 5.00e-8*d,
-    w: norm360(29.1241 + 1.01444e-5*d),
-    a: 0.387098,
-    e: 0.205635 + 5.59e-10*d,
-    M: norm360(168.6562 + 4.0923344368*d),
-  }),
-  Venus: (d)=>({
-    N: norm360(76.6799 + 2.46590e-5*d),
-    i: 3.3946 + 2.75e-8*d,
-    w: norm360(54.8910 + 1.38374e-5*d),
-    a: 0.723330,
-    e: 0.006773 - 1.302e-9*d,
-    M: norm360(48.0052 + 1.6021302244*d),
-  }),
-  Mars: (d)=>({
-    N: norm360(49.5574 + 2.11081e-5*d),
-    i: 1.8497 - 1.78e-8*d,
-    w: norm360(286.5016 + 2.92961e-5*d),
-    a: 1.523688,
-    e: 0.093405 + 2.516e-9*d,
-    M: norm360(18.6021 + 0.5240207766*d),
-  }),
-  Jupiter: (d)=>({
-    N: norm360(100.4542 + 2.76854e-5*d),
-    i: 1.3030 - 1.557e-7*d,
-    w: norm360(273.8777 + 1.64505e-5*d),
-    a: 5.20256,
-    e: 0.048498 + 4.469e-9*d,
-    M: norm360(19.8950 + 0.0830853001*d),
-  }),
-  Saturn: (d)=>({
-    N: norm360(113.6634 + 2.38980e-5*d),
-    i: 2.4886 - 1.081e-7*d,
-    w: norm360(339.3939 + 2.97661e-5*d),
-    a: 9.55475,
-    e: 0.055546 - 9.499e-9*d,
-    M: norm360(316.9670 + 0.0334442282*d),
-  }),
-  Uranus: (d)=>({
-    N: norm360(74.0005 + 1.3978e-5*d),
-    i: 0.7733 + 1.9e-8*d,
-    w: norm360(96.6612 + 3.0565e-5*d),
-    a: 19.18171 - 1.55e-8*d,
-    e: 0.047318 + 7.45e-9*d,
-    M: norm360(142.5905 + 0.011725806*d),
-  }),
-  Neptune: (d)=>({
-    N: norm360(131.7806 + 3.0173e-5*d),
-    i: 1.7700 - 2.55e-7*d,
-    w: norm360(272.8461 - 6.027e-6*d),
-    a: 30.05826 + 3.313e-8*d,
-    e: 0.008606 + 2.15e-9*d,
-    M: norm360(260.2471 + 0.005995147*d),
-  }),
-};
-
-function planetHelio(name, d){
-  const el = ORB[name](d);
-  const E = keplerE(el.M, el.e);
-
-  const x = el.a * (cosD(E) - el.e);
-  const y = el.a * (sinD(E) * Math.sqrt(1 - el.e*el.e));
-  const r = Math.sqrt(x*x + y*y);
-  const v = norm360(atan2D(y,x));
-
-  const rect = eclRectFromOrbital(r, v, el.N, el.i, el.w);
-  const { lon, lat } = lonLatFromRect(rect);
-  return { lon, lat };
-}
-
-// ※厳密な地心化は本来やるけど、ここは「出生時間不明でも強い」ラインで止める。
-//   星座判定とアスペクト（性格/流れ）にはこれでも十分 “ガチ感” を作れる。
-function computePlanets(d){
-  const out = {};
-  const names = ["Mercury","Venus","Mars","Jupiter","Saturn","Uranus","Neptune"];
-  for (const n of names){
-    out[n] = planetHelio(n, d);
-  }
-  return out;
-}
-
-// --------- アスペクト（角度）---------
-
-const ASPECTS = [
-  { key:"conj", name:"重なり", deg:0,   orb:6 },
-  { key:"sext", name:"なめらか", deg:60,  orb:4.5 },
-  { key:"square", name:"刺激",  deg:90,  orb:5 },
-  { key:"trine", name:"追い風",  deg:120, orb:5 },
-  { key:"opp", name:"引っぱり合い", deg:180, orb:6 },
+const SIGNS = [
+  "牡羊座","牡牛座","双子座","蟹座","獅子座","乙女座",
+  "天秤座","蠍座","射手座","山羊座","水瓶座","魚座"
 ];
 
-function aspectBetween(aDeg, bDeg, isMoonInvolved=false){
-  const d = angDiff(aDeg, bDeg);
-  let best = null;
-  for (const asp of ASPECTS){
-    const orb = isMoonInvolved ? (asp.orb + 1.2) : asp.orb; // 月は広め（出生時間不明対策）
-    const delta = Math.abs(d - asp.deg);
-    if (delta <= orb){
-      const strength = 1 - (delta / orb); // 0..1
-      if (!best || strength > best.strength){
-        best = { ...asp, delta, strength, exact:d };
-      }
-    }
+const ELEMENT = {
+  "牡羊座":"fire","獅子座":"fire","射手座":"fire",
+  "牡牛座":"earth","乙女座":"earth","山羊座":"earth",
+  "双子座":"air","天秤座":"air","水瓶座":"air",
+  "蟹座":"water","蠍座":"water","魚座":"water"
+};
+
+function signFromMonthDay(m, d){
+  // 太陽星座（一般的境界）
+  if ((m===3 && d>=21) || (m===4 && d<=19)) return "牡羊座";
+  if ((m===4 && d>=20) || (m===5 && d<=20)) return "牡牛座";
+  if ((m===5 && d>=21) || (m===6 && d<=21)) return "双子座";
+  if ((m===6 && d>=22) || (m===7 && d<=22)) return "蟹座";
+  if ((m===7 && d>=23) || (m===8 && d<=22)) return "獅子座";
+  if ((m===8 && d>=23) || (m===9 && d<=22)) return "乙女座";
+  if ((m===9 && d>=23) || (m===10 && d<=23)) return "天秤座";
+  if ((m===10 && d>=24) || (m===11 && d<=22)) return "蠍座";
+  if ((m===11 && d>=23) || (m===12 && d<=21)) return "射手座";
+  if ((m===12 && d>=22) || (m===1 && d<=19)) return "山羊座";
+  if ((m===1 && d>=20) || (m===2 && d<=18)) return "水瓶座";
+  return "魚座";
+}
+
+function approxMoonSign(date){
+  // 開発者メモ：
+  // 本格月計算は重いので、出生時間なしでも破綻しにくい簡易版
+  // 29.53日周期でサインを回す（ざっくり）
+  const base = new Date("2000-01-06T00:00:00Z"); // 新月近辺の基準（目安）
+  const days = (date.getTime() - base.getTime()) / 86400000;
+  const phase = ((days % 29.530588) + 29.530588) % 29.530588;
+  const signIndex = Math.floor((phase / 29.530588) * 12);
+  return SIGNS[signIndex];
+}
+
+function elementBias(sign){
+  const e = ELEMENT[sign];
+  return {
+    fire:  { WORK: +8, LOVE: +2, MONEY:+2, LIFE:+1 },
+    earth: { WORK: +6, LOVE: +2, MONEY:+6, LIFE:+6 },
+    air:   { WORK: +4, LOVE: +6, MONEY:+2, LIFE:+2 },
+    water: { WORK: +2, LOVE: +8, MONEY:+1, LIFE:+4 }
+  }[e] || {WORK:0,LOVE:0,MONEY:0,LIFE:0};
+}
+
+/* ---------------------------
+  数秘
+--------------------------- */
+function lifePathNumber(date){
+  const y = String(date.getFullYear());
+  const m = String(date.getMonth()+1).padStart(2,"0");
+  const d = String(date.getDate()).padStart(2,"0");
+  const s = y+m+d;
+  let sum = 0;
+  for (const ch of s) sum += Number(ch);
+  while (sum > 9) sum = String(sum).split("").reduce((a,c)=>a+Number(c),0);
+  return sum || 9;
+}
+
+function personalYear(date, yearNow){
+  // ざっくり：誕生日（MMDD）＋年（YYYY）の合算
+  const mm = date.getMonth()+1;
+  const dd = date.getDate();
+  const s = String(yearNow) + String(mm) + String(dd);
+  let sum = 0;
+  for (const ch of s) sum += Number(ch);
+  while (sum > 9) sum = String(sum).split("").reduce((a,c)=>a+Number(c),0);
+  return sum || 9;
+}
+
+function numerologyBias(lp){
+  // “意味がぶれにくい”だけ補正（控えめ）
+  const map = {
+    1: {WORK:+8, LOVE:+1, MONEY:+3, LIFE:+1},
+    2: {WORK:+2, LOVE:+8, MONEY:+1, LIFE:+3},
+    3: {WORK:+4, LOVE:+5, MONEY:+2, LIFE:+1},
+    4: {WORK:+6, LOVE:+2, MONEY:+5, LIFE:+6},
+    5: {WORK:+5, LOVE:+3, MONEY:+2, LIFE:-1},
+    6: {WORK:+2, LOVE:+7, MONEY:+2, LIFE:+5},
+    7: {WORK:+3, LOVE:+1, MONEY:+2, LIFE:+4},
+    8: {WORK:+6, LOVE:+1, MONEY:+8, LIFE:+2},
+    9: {WORK:+3, LOVE:+5, MONEY:+2, LIFE:+2},
+  };
+  return map[lp] ?? {WORK:0,LOVE:0,MONEY:0,LIFE:0};
+}
+
+function yearBias(py){
+  // 今年の空気（出しすぎると“今日運勢”に寄るので控えめ）
+  const map = {
+    1:{WORK:+3,LOVE:0,MONEY:+1,LIFE:0},
+    2:{WORK:0,LOVE:+2,MONEY:0,LIFE:+1},
+    3:{WORK:+1,LOVE:+1,MONEY:0,LIFE:0},
+    4:{WORK:+2,LOVE:0,MONEY:+1,LIFE:+2},
+    5:{WORK:+1,LOVE:0,MONEY:0,LIFE:-1},
+    6:{WORK:0,LOVE:+2,MONEY:0,LIFE:+2},
+    7:{WORK:0,LOVE:0,MONEY:0,LIFE:+1},
+    8:{WORK:+2,LOVE:0,MONEY:+2,LIFE:0},
+    9:{WORK:+1,LOVE:+1,MONEY:0,LIFE:+1},
+  };
+  return map[py] ?? {WORK:0,LOVE:0,MONEY:0,LIFE:0};
+}
+
+/* ---------------------------
+  出生地（都道府県）補正
+--------------------------- */
+function regionOf(pref){
+  if (!pref || pref==="未選択") return "unknown";
+  const HOKKAIDO_TOHOKU = ["北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県"];
+  const KANTO = ["茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県"];
+  const CHUBU = ["新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県"];
+  const KINKI = ["三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県"];
+  const CHUGOKU_SHIKOKU = ["鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県"];
+  const KYUSHU_OKINAWA = ["福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
+
+  if (HOKKAIDO_TOHOKU.includes(pref)) return "north";
+  if (KANTO.includes(pref)) return "kanto";
+  if (CHUBU.includes(pref)) return "chubu";
+  if (KINKI.includes(pref)) return "kinki";
+  if (CHUGOKU_SHIKOKU.includes(pref)) return "west";
+  if (KYUSHU_OKINAWA.includes(pref)) return "south";
+  return "unknown";
+}
+
+function placeBias(pref){
+  const r = regionOf(pref);
+  const map = {
+    north: {WORK:+2, LOVE:+1, MONEY:+1, LIFE:+4}, // 基盤寄り
+    kanto: {WORK:+4, LOVE:0,  MONEY:+3, LIFE:0}, // 競争/速度
+    chubu: {WORK:+3, LOVE:0,  MONEY:+2, LIFE:+2},// 堅実
+    kinki: {WORK:+1, LOVE:+3, MONEY:+1, LIFE:0}, // 対人/表現
+    west:  {WORK:+2, LOVE:+1, MONEY:+1, LIFE:+1},// 調整
+    south: {WORK:+1, LOVE:+3, MONEY:0,  LIFE:+2},// 情/縁
+    unknown:{WORK:0,LOVE:0,MONEY:0,LIFE:0}
+  };
+  return map[r] ?? map.unknown;
+}
+
+/* ---------------------------
+  名前（軽量）補正
+--------------------------- */
+function romanizeRough(name){
+  // 開発者メモ：厳密ローマ字は不要。母音比率の“雰囲気”を見るだけ
+  // 日本語以外でも最低限動くように英字だけ抽出
+  return (name || "")
+    .toLowerCase()
+    .replace(/[^a-z]/g,"");
+}
+
+function vowelScore(roman){
+  let a=0,i=0,u=0,e=0,o=0;
+  for (const ch of roman){
+    if (ch==="a") a++;
+    if (ch==="i") i++;
+    if (ch==="u") u++;
+    if (ch==="e") e++;
+    if (ch==="o") o++;
   }
-  return best;
+  const total = a+i+u+e+o;
+  if (total===0) return {a:0,i:0,u:0,e:0,o:0};
+  return { a:a/total, i:i/total, u:u/total, e:e/total, o:o/total };
 }
 
-function computeAspectList(bodyLongitudes){
-  // bodyLongitudes: { Sun:deg, Moon:deg, Mercury:deg... }
-  const keys = Object.keys(bodyLongitudes);
-  const list = [];
-  for (let i=0;i<keys.length;i++){
-    for (let j=i+1;j<keys.length;j++){
-      const A = keys[i], B = keys[j];
-      const asp = aspectBetween(bodyLongitudes[A], bodyLongitudes[B], (A==="Moon" || B==="Moon"));
-      if (asp){
-        list.push({
-          a:A, b:B,
-          ...asp,
-        });
-      }
-    }
+function nameBias(name){
+  const s = (name || "").replace(/\s/g,"");
+  const len = s.length;
+  const roman = romanizeRough(name);
+  const v = vowelScore(roman);
+
+  // 控えめ補正（強すぎると占いが崩れるので）
+  const bias = {WORK:0,LOVE:0,MONEY:0,LIFE:0};
+
+  // 文字数：短いほど機動力、長いほど安定…くらいの軽さ
+  if (len >= 6) { bias.LIFE += 2; bias.WORK += 1; }
+  if (len <= 3 && len > 0) { bias.WORK += 2; }
+
+  // 母音：雰囲気補正
+  bias.LOVE += Math.round(v.o * 3 + v.e * 2);
+  bias.WORK += Math.round(v.i * 3 + v.a * 1);
+  bias.LIFE += Math.round(v.u * 2);
+  // MONEY は直接は触りすぎない（崩れやすいので）
+  return bias;
+}
+
+/* ---------------------------
+  統合スコア → タイプ決定
+--------------------------- */
+
+function mergeScores(...list){
+  const s = {WORK:0,LOVE:0,MONEY:0,LIFE:0};
+  for (const x of list){
+    s.WORK += x.WORK||0;
+    s.LOVE += x.LOVE||0;
+    s.MONEY += x.MONEY||0;
+    s.LIFE += x.LIFE||0;
   }
-  // 強い順
-  list.sort((x,y)=> y.strength - x.strength);
-  return list;
+  // 0..100に寄せる（見た目用）
+  const base = {WORK:50,LOVE:50,MONEY:50,LIFE:50};
+  return {
+    WORK: clamp(base.WORK + s.WORK, 0, 100),
+    LOVE: clamp(base.LOVE + s.LOVE, 0, 100),
+    MONEY: clamp(base.MONEY + s.MONEY, 0, 100),
+    LIFE: clamp(base.LIFE + s.LIFE, 0, 100),
+  };
 }
 
-// --------- 月相（人生のリズムの根拠に使う）---------
-
-function moonPhaseName(sunLon, moonLon){
-  const diff = norm360(moonLon - sunLon); // 0..360
-  // 0:新月 90:上弦 180:満月 270:下弦
-  if (diff < 22.5 || diff >= 337.5) return { key:"new", name:"新月", vibe:"始まり" };
-  if (diff < 67.5)  return { key:"waxC", name:"三日月", vibe:"育てる" };
-  if (diff < 112.5) return { key:"first", name:"上弦", vibe:"押し出す" };
-  if (diff < 157.5) return { key:"waxG", name:"満ちる月", vibe:"伸ばす" };
-  if (diff < 202.5) return { key:"full", name:"満月", vibe:"ピーク" };
-  if (diff < 247.5) return { key:"wanG", name:"欠ける月", vibe:"整える" };
-  if (diff < 292.5) return { key:"last", name:"下弦", vibe:"見直す" };
-  return { key:"wanC", name:"細い月", vibe:"手放す" };
+function axisLabel(profile){
+  const entries = Object.entries(profile).sort((a,b)=>b[1]-a[1]);
+  const [top, topV] = entries[0];
+  const [sec, secV] = entries[1];
+  return `${top}優勢（次点：${sec}）`;
 }
 
-// --------- 20タイプ（占い結果に基づいて決定）---------
+function pickTypeKey(profile, seed){
+  // 20タイプへ安定割り当て（スコア×seedで散らす）
+  // 開発者メモ：同スコア帯が偏らないように、top2軸＋seedで決める
+  const order = Object.entries(profile).sort((a,b)=>b[1]-a[1]).map(x=>x[0]); // ["WORK","LIFE",...]
+  const top = order[0];
+  const second = order[1];
 
-// 4エレメント × 5ムード ＝ 20
-const MOODS = ["ANGEL","WIZ","HERO","ART","MECHA"]; // 可愛い方向に後で名称だけ差し替えやすい
-
-function moodFromScores(scores, lp){
-  // スコアと数秘からムードを決める（安定して分岐する）
-  // lp:1-9
-  const { work, money, love, health } = scores;
-  // “ふわふわ見た目×裏ガチ”なので、雑なランダムにしない
-  if (love >= 0.7 && health >= 0.55) return "ANGEL";
-  if (work >= 0.7 && money >= 0.6) return "HERO";
-  if (money >= 0.7 && (lp===8 || lp===4)) return "MECHA";
-  if (work >= 0.6 && love >= 0.55) return "ART";
-  return "WIZ";
-}
-
-function elementDominant(signs){
-  // signs: string[]
-  const c = { "火":0, "地":0, "風":0, "水":0 };
-  for (const s of signs) c[signToElement(s)]++;
-  return Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0];
-}
-
-function scoreFromAspects(aspects){
-  // 出生時間なしでも使える“根拠付きスコア”
-  // 強いアスペクトほど影響を大きくする
-  // （超専門用語は出さない。内部計算だけに使う）
-  let work = 0.5, money = 0.5, love = 0.5, health = 0.5;
-
-  const add = (k, v)=> Math.max(0, Math.min(1, k + v));
-
-  for (const a of aspects.slice(0, 12)){ // 強い上位だけ
-    const w = 0.10 * a.strength; // 1件あたり最大0.10程度
-    const pair = `${a.a}-${a.b}`;
-
-    // ざっくりルール（後で調整OK）
-    if (pair.includes("Sun") && pair.includes("Mars")) work = add(work, +w);
-    if (pair.includes("Mercury") && pair.includes("Sun")) work = add(work, +w*0.7);
-    if (pair.includes("Venus") && pair.includes("Moon")) love = add(love, +w);
-    if (pair.includes("Venus") && pair.includes("Sun")) love = add(love, +w*0.8);
-    if (pair.includes("Jupiter") && pair.includes("Sun")) money = add(money, +w);
-    if (pair.includes("Saturn") && pair.includes("Sun")) money = add(money, +w*0.6);
-
-    // 緊張系は“注意が必要”＝健康/メンタルに響きやすいとして微調整
-    if (a.key === "square" || a.key === "opp"){
-      health = add(health, -w*0.7);
-      // ただし仕事の燃料になることもある
-      work = add(work, +w*0.25);
-    } else {
-      health = add(health, +w*0.35);
-    }
-  }
-
-  return { work, money, love, health };
-}
-
-function typeKeyFrom(element, mood){
-  // 20通りキー（可愛い名前は data.js 側で自由に変更）
-  // 例：FIRE_ANGEL / WATER_WIZ ...
-  const elemKey = (element==="火") ? "FIRE" : (element==="地") ? "EARTH" : (element==="風") ? "AIR" : "WATER";
-  return `${elemKey}_${mood}`;
-}
-
-// --------- メイン：占いコア（入力→結果）---------
-
-export function computeFortuneCore({ name, dobStr, timeStr, prefStr, tone, seedStr }){
-  // timeStr: "不明" or "HH:MM"
-  // 出生時間不明なら「12:00」を仮定（境界問題が一番減りやすい）
-  const [Y,M,D] = dobStr.split("-").map(Number);
-  let hh = 12, mm = 0;
-  if (timeStr && /^\d{1,2}:\d{2}$/.test(timeStr)){
-    const [h, m] = timeStr.split(":").map(Number);
-    hh = clampH(h); mm = clampM(m);
-  }
-  const localDate = new Date(Y, M-1, D, hh, mm, 0, 0);
-
-  const jd = dateToJulianDay(localDate);
-  const dnum = jdToDayNumber(jd);
-
-  const sun = sunPosition(dnum);
-  const moon = moonPositionHighAccuracy(dnum, sun);
-  const planets = computePlanets(dnum);
-
-  const bodies = {
-    Sun: sun.lon,
-    Moon: moon.lon,
-    Mercury: planets.Mercury.lon,
-    Venus: planets.Venus.lon,
-    Mars: planets.Mars.lon,
-    Jupiter: planets.Jupiter.lon,
-    Saturn: planets.Saturn.lon,
-    Uranus: planets.Uranus.lon,
-    Neptune: planets.Neptune.lon,
+  const map = {
+    "WORK|LIFE": ["t01","t03","t15","t19"],
+    "WORK|MONEY":["t16","t05","t03","t15"],
+    "WORK|LOVE": ["t02","t07","t12","t18"],
+    "LOVE|LIFE": ["t04","t14","t20","t07"],
+    "LOVE|MONEY":["t12","t07","t04","t20"],
+    "MONEY|LIFE":["t05","t15","t20","t01"],
+    "MONEY|WORK":["t16","t03","t05","t15"],
+    "LIFE|WORK": ["t01","t19","t15","t03"],
+    "LIFE|LOVE": ["t14","t04","t20","t07"],
+    "LIFE|MONEY":["t05","t15","t20","t01"],
   };
 
-  const signs = {
-    Sun: lonToSign(bodies.Sun),
-    Moon: lonToSign(bodies.Moon),
-    Mercury: lonToSign(bodies.Mercury),
-    Venus: lonToSign(bodies.Venus),
-    Mars: lonToSign(bodies.Mars),
-    Jupiter: lonToSign(bodies.Jupiter),
-    Saturn: lonToSign(bodies.Saturn),
-    Uranus: lonToSign(bodies.Uranus),
-    Neptune: lonToSign(bodies.Neptune),
-  };
+  const key = `${top}|${second}`;
+  const cands = map[key] || ["t20","t01","t03","t06"];
 
-  const aspects = computeAspectList(bodies);
-  const scores = scoreFromAspects(aspects);
+  const rnd = mulberry32(seed);
+  const idx = Math.floor(rnd() * cands.length);
+  return cands[idx];
+}
 
-  const lp = calcLifePathNumber(localDate);
+function estimateLevel(pref, time){
+  // 表示用：出生地/時間の入力があるほど“補助情報あり”にする（精度そのものを誤魔化さない表現）
+  const hasPref = pref && pref !== "未選択";
+  const hasTime = time && time !== "不明";
+  if (hasPref && hasTime) return "補助情報あり（拡張向け）";
+  if (hasPref) return "補助情報あり（出生地）";
+  if (hasTime) return "補助情報あり（出生時間）";
+  return "標準（出生時間なし）";
+}
 
-  const domElement = elementDominant([signs.Sun, signs.Moon, signs.Mercury, signs.Venus, signs.Mars]);
-  const mood = moodFromScores(scores, lp);
-  const typeKey = typeKeyFrom(domElement, mood);
+/* ===========================
+  外部公開API
+=========================== */
 
-  const phase = moonPhaseName(bodies.Sun, bodies.Moon);
+export function buildFortune({ name, dobStr, pref, time, yearNow }){
+  const birth = new Date(dobStr);
+  const m = birth.getMonth()+1;
+  const d = birth.getDate();
 
-  // 境界フラグ（月は特に）
-  const moonBoundary = isNearSignBoundary(bodies.Moon, 1.2);
-  const sunBoundary  = isNearSignBoundary(bodies.Sun, 0.5);
+  const sun = signFromMonthDay(m,d);
+  const moon = approxMoonSign(birth);
+
+  const lp = lifePathNumber(birth);
+  const py = personalYear(birth, yearNow);
+
+  const seed = hashString(`${dobStr}|${pref||""}|${(name||"").toLowerCase()}`);
+
+  const score = mergeScores(
+    elementBias(sun),
+    elementBias(moon),
+    numerologyBias(lp),
+    yearBias(py),
+    placeBias(pref),
+    nameBias(name)
+  );
+
+  const typeKey = pickTypeKey(score, seed);
+  const type = TYPES.find(t=>t.key===typeKey) || TYPES[0];
 
   return {
     meta: {
-      name: name || "",
-      dobStr,
-      timeStr: timeStr || "不明",
-      prefStr: prefStr || "",
-      tone,
-      seedStr,
-      jd,
-      dnum,
+      sun, moon, lp, py,
+      level: estimateLevel(pref, time),
+      axis: axisLabel(score),
+      seed
     },
-    bodies,
-    signs,
-    aspects,
-    scores,
-    lp,
-    phase,
-    typeKey,
-    flags: {
-      moonBoundary,
-      sunBoundary,
-      timeUnknown: !(timeStr && /^\d{1,2}:\d{2}$/.test(timeStr)),
-    }
+    profile: score,
+    type
   };
 }
-
-function clampH(h){ return Math.max(0, Math.min(23, h)); }
-function clampM(m){ return Math.max(0, Math.min(59, m)); }
