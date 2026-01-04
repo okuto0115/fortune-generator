@@ -1,5 +1,5 @@
 /* =========================================================
-  style.css / Version 1
+  style.css / Version 2
   初心者向け：ここだけ触ればデザインが変わる
 ========================================================= */
 
@@ -18,19 +18,18 @@
   --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Noto Sans Mono", monospace;
 
-  /* ✅ 背景画像を使いたいならここ
-     assets/bg/ に置いて、ファイル名を変えるだけ */
-  --bgImage: url("../assets/bg/bg.png"); /* ないならコメントアウトしてOK */
+  /* 背景画像を使うなら assets/bg/bg.png を置いてね */
+  --bgImage: url("../assets/bg/bg.png");
 }
 
 *{ box-sizing:border-box; }
+
 body{
   margin:0;
   font-family: var(--font);
   color: var(--text);
   line-height: 1.7;
 
-  /* 背景：画像 + グラデ（画像が無くても動く） */
   background:
     radial-gradient(1200px 600px at 20% 0%, rgba(138,180,255,.20), transparent 55%),
     radial-gradient(900px 500px at 90% 10%, rgba(255,140,180,.14), transparent 55%),
@@ -50,9 +49,16 @@ body{
   gap: 12px;
   margin-bottom: 16px;
 }
+
 h1{ margin:0; font-size: 20px; }
 .sub{ margin:4px 0 0; color: var(--muted); font-size: 13px; }
-.badge{ display:flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+
+.badge{
+  display:flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
 
 .grid{
   display:grid;
@@ -85,6 +91,7 @@ label{
   font-size: 12px;
   color: var(--muted);
 }
+
 input, select{
   width: 100%;
   padding: 10px 12px;
@@ -95,11 +102,18 @@ input, select{
   outline: none;
   font-size: 14px;
 }
+
 input::placeholder{ color: rgba(255,255,255,.38); }
 
 .row2{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-.btns{ display:flex; flex-wrap:wrap; gap: 10px; margin-top: 12px; }
+.btns{
+  display:flex;
+  flex-wrap:wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 button{
   padding: 10px 14px;
   border-radius: 12px;
@@ -109,12 +123,14 @@ button{
   cursor: pointer;
   font-size: 14px;
 }
+
 button.primary{
   background: var(--accent);
   border-color: transparent;
   color: #08101d;
   font-weight: 800;
 }
+
 button:active{ transform: translateY(1px); }
 
 .hint{ margin: 12px 0 0; color: var(--muted); font-size: 12px; }
@@ -127,16 +143,15 @@ button:active{ transform: translateY(1px); }
   gap: 10px;
   margin-bottom: 10px;
 }
-.b{
-  display:flex;
-  gap: 10px;
-  align-items: baseline;
-}
+
+.b{ display:flex; gap: 10px; align-items: baseline; }
+
 .k{
   min-width: 52px;
   color: var(--muted);
   font-size: 12px;
 }
+
 .v{ font-size: 14px; }
 
 textarea{
@@ -160,11 +175,13 @@ textarea{
   padding: 10px 12px;
   background: rgba(255,255,255,.03);
 }
+
 .todayBox summary{
   cursor:pointer;
   color: var(--muted);
   font-size: 13px;
 }
+
 .steps{
   margin: 10px 0 0;
   font-family: var(--mono);
@@ -178,6 +195,7 @@ textarea{
   display:flex;
   justify-content: center;
 }
+
 code{
   font-family: var(--mono);
   font-size: 12px;
