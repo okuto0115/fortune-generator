@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>占いジェネレーター</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; margin: 24px; line-height: 1.7; }
+    .wrap { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 12px 0; }
+    label { display:block; font-size: 13px; margin: 10px 0 4px; }
+    input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px; font-size: 14px; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btns { display:flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    button { padding: 10px 14px; border: 0; border-radius: 10px; cursor: pointer; font-size: 14px; }
+    button.primary { background: #111; color: #fff; }
+    button.ghost { background: #f3f3f3; }
+    textarea { width: 100%; min-height: 420px; padding: 12px; border: 1px solid #ccc; border-radius: 12px; font-size: 13px; white-space: pre-wrap; }
+    .note { color:#666; font-size:12px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>占いジェネレーター（HTML/JSだけ）</h1>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>名前</label>
+        <input id="name" placeholder="例：平山 海斗" />
+      </div>
+      <div>
+        <label>出生地（都道府県など）</label>
+        <input id="place" placeholder="例：福岡県" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>生年月日</label>
+        <input id="dob" type="date" />
+      </div>
+      <div>
+        <label>出生時間（任意）</label>
+        <input id="time" placeholder="例：23:30頃 / 不明" />
+      </div>
+    </div>
+
+    <div class="btns">
+      <button class="primary" id="gen">占いを生成</button>
+      <button class="ghost" id="copy">結果をコピー</button>
+      <button class="ghost" id="clear">クリア</button>
+    </div>
+
+    <p class="note">
+      ※これは「鑑定文テンプレ＋一部（数秘）自動計算」で整形する簡易ジェネレーター。<br>
+      本格的な天体計算・干支の厳密計算は別途ライブラリ/APIが必要。
+    </p>
+  </div>
+
+  <div class="card">
+    <label>生成結果</label>
+    <textarea id="out" readonly></textarea>
+  </div>
+</div>
+
+<script>
+  // --- ユーティリティ ---
+  const pad2 = (n) => String(n).padStart(2, "0");
+
+  function calcLifePathNumber(dateObj) {
+    // 生年月日（YYYY-MM-DD）から数秘（1〜9）を作る簡易版
+    // 例：1996-01-15 -> 1+9+9+6+0+1+1+5 = 32 -> 3+2 = 5
+    const s = `${dateObj.getFullYear()}${pad2(dateObj.getMonth()+1)}${pad2(dateObj.getDate())}`;
+    let sum = 0;
+    for (const ch of s) sum += Number(ch);
+    while (sum > 9) {
+      sum = String(sum).split("").reduce((a,c)=>a+Number(c),0);
+    }
+    return sum; // 1-9
+  }
+
+  function lifePathKeywords(n) {
+    // 雰囲気づけ用（短く）
+    const map = {
+      1: "始動・自立",
+      2: "調和・協調",
+      3: "表現・拡散",
+      4: "基盤・継続",
+      5: "変化・挑戦",
+      6: "愛情・責任",
+      7: "探求・内省",
+      8: "達成・拡大",
+      9: "完成・手放し"
+    };
+    return map[n] ?? "";
+  }
+
+  function buildReading({ name, place, dobStr, timeStr }) {
+    const date = new Date(dobStr);
+    const yyyy = date.getFullYear();
+    const mm = date.getMonth() + 1;
+    const dd = date.getDate();
+
+    const lp = calcLifePathNumber(date);
+    const lpKey = lifePathKeywords(lp);
+
+    // ここが「テンプレ」部分：あなたの鑑定フォーマットに合わせて文章を固定できる
+    // さらに凝るなら、lpや月・日で文言の分岐を増やす
+    return `# 🔮 総合鑑定：**${name || "（名前未入力）"}**
+
+**生年月日**：${yyyy}/${pad2(mm)}/${pad2(dd)}
+**出生地**：${place || "（未入力）"}
+**出生時間**：${timeStr?.trim() ? timeStr.trim() : "不明"}
+**使用占術**：西洋占星術 × 数秘術 × 東洋占術 × 姓名エネルギー（簡易テンプレ）
+
+---
+
+## 🧑‍🤝‍🧑 社会キャラ（名前から見る印象・対人運）
+
+**第一印象**
+・誠実
+・落ち着き
+・信頼感が強い
+
+**他人から見たキャラ**
+・頼られやすい
+・責任感がある
+・相談役になりやすい
+
+**人間関係のクセ**
+・距離が縮むほど面倒見が良い
+・表では冷静、内面は情熱的
+・自然とまとめ役に回る
+
+**社会的評価の出方**
+・派手ではないが、信用の積み重ねで評価が上がるタイプ
+
+---
+
+## 🌍 全体運（人生構造）
+
+**大器晩成・後半上昇型**
+・人生後半ほど満足度が高い
+・土台が固まるほど運が伸びる
+
+（数秘：${lp}／${lpKey}）
+
+---
+
+## 💼 仕事運
+
+**表現 × 企画 × 発信の命式**
+・自分の名前と世界観で仕事を築く
+・個人裁量の大きい働き方と相性が良い
+
+**運勢の流れ**
+・基礎工事 → 飛躍 → 安定拡張 → 経営フェーズ
+
+---
+
+## 💰 金運
+
+**回収力の強い金運**
+・波はあるが最終的に回収できる
+・土台の整備が金運を守る
+
+---
+
+## 🫁 健康運
+
+・ストレスが呼吸・神経系に出やすい
+・休養管理が最大の開運要素
+
+---
+
+## ❤️ 恋愛運
+
+**人生連動型・本命集中タイプ**
+・仕事運と強く連動
+・精神的に自立した相手と好相性
+
+---
+
+## 🧭 人生の主要転換点
+
+・基礎工事期：土台づくりが最優先
+・上昇期：評価が表に出る
+・完成期：自由と安定が同時に手に入る
+
+---
+
+## 🕊 命式の最終評価
+
+> 静かに積み上げ、後半で大きく報われる人生構造
+`;
+  }
+
+  // --- イベント ---
+  const $ = (id) => document.getElementById(id);
+  $("gen").addEventListener("click", () => {
+    const name = $("name").value;
+    const place = $("place").value;
+    const dob = $("dob").value;
+    const time = $("time").value;
+
+    if (!dob) {
+      alert("生年月日を入力してね");
+      return;
+    }
+
+    $("out").value = buildReading({ name, place, dobStr: dob, timeStr: time });
+  });
+
+  $("copy").addEventListener("click", async () => {
+    const text = $("out").value;
+    if (!text.trim()) return alert("先に占いを生成してね");
+    await navigator.clipboard.writeText(text);
+    alert("コピーしたよ");
+  });
+
+  $("clear").addEventListener("click", () => {
+    $("name").value = "";
+    $("place").value = "";
+    $("dob").value = "";
+    $("time").value = "";
+    $("out").value = "";
+  });
+</script>
+</body>
+</html>
