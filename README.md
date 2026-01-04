@@ -1,13 +1,21 @@
 # fortune-generator
-# クマ占いジェネレーター（Version 3.1）
+# クマ占いジェネレーター（v1.0.0）
 
-## フォルダ構成
-- index.html：画面
-- css/style.css：見た目
-- js/app.js：画面の動き（入力保持など）
-- js/fortune.js：占いロジック
-- js/data.js：文章DB（ここを増やすのがメイン）
-- js/utils.js：共通処理
+## 使い方
+1. このフォルダ一式を GitHub リポジトリに入れる
+2. GitHub Pages を有効化する
+   - Settings → Pages
+   - Source: `Deploy from a branch`
+   - Branch: `main` / Folder: `/ (root)`
+3. 発行されたURLにアクセス
 
-## GitHub Pages
-Settings → Pages → Branch: main / (root) で公開できます。
+## カスタムする場所（初心者向け）
+- デザイン：`css/style.css`
+- 文章：`js/data.js`（基本ここだけ触ればOK）
+- 占い計算：`js/fortune.js`（根幹。むやみに触らないのが安全）
+- UI挙動：`js/app.js`
+
+## 素材置き場
+- `assets/illust/`：クマのイラスト
+- `assets/bg/`：背景
+- `assets/icons/`：アイコン類
