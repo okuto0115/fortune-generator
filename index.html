@@ -1,21 +1,43 @@
-<!-- Version: 1  /  2026-01-04 -->
+<!-- Version: 3  /  2026-01-04
+  ============================================================
+  ✅ 公開用（画面はスッキリ）＋ ✅ 開発者メモ多め（初心者向け）
+
+  ▼ このファイルの使い方
+  - GitHub Pagesに置くなら、このファイル名は index.html にするのが一番ラク。
+  - 1ファイル完結（HTML/CSS/JS全部入り）
+
+  ▼ 触ってOKな場所（初心者向け）
+  1) CSSの :root（色/角丸/余白/フォント）
+  2) CONFIG（セクション順や表示ON/OFF）
+  3) TEXT_DB
+     - tones：やさしめ/標準/毒舌の文章
+     - kumaTypeSeeds：20タイプの名前や説明の材料
+     - archetypes：詳細鑑定（A/B/C）の本文
+
+  ▼ 今の仕様
+  - 出生地(place)、出生時間(time)は「表示に出すだけ」
+  - 将来、ロジックに組み込む余地を残している（コメント参照）
+
+  ▼ 画面に出さないもの
+  - 「テンプレ」「未搭載」など開発者向け注釈は表示しない
+  ============================================================
+-->
 <!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>クマ占い（20タイプ）</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>クマ占い</title>
 
   <style>
     /* =========================================================
-      ✅ 初心者が触ってOK：デザインは基本ここだけ
-      - 色 / 角丸 / 余白 / フォント / 最大幅
+      ✅ 初心者が触ってOK：デザイン調整はここだけでOK
     ========================================================= */
     :root{
       --bg:#0b0b10;
       --panel:#11111a;
       --text:#f3f3f7;
-      --muted:rgba(243,243,247,.70);
+      --muted:rgba(243,243,247,.72);
       --line:rgba(255,255,255,.12);
       --accent:#8ab4ff;
 
@@ -24,14 +46,12 @@
       --gap:12px;
       --shadow:0 10px 30px rgba(0,0,0,.35);
 
+      --max:980px;
       --font:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
       --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Noto Sans Mono",monospace;
-
-      --max:980px;
     }
 
     *,*::before,*::after{ box-sizing:border-box; }
-
     body{
       margin:0;
       background:
@@ -49,7 +69,7 @@
     .sub{ margin:0; color:var(--muted); font-size:13px; }
 
     .grid{ display:grid; grid-template-columns:1fr; gap:var(--gap); align-items:start; }
-    @media (min-width: 900px){ .grid{ grid-template-columns:360px 1fr; } }
+    @media (min-width:900px){ .grid{ grid-template-columns:360px 1fr; } }
 
     .card{
       background:linear-gradient(180deg, rgba(255,255,255,.04), transparent 42%), var(--panel);
@@ -62,7 +82,7 @@
     .sectionTitle{ font-size:13px; color:var(--muted); margin:0 0 10px; letter-spacing:.02em; }
 
     label{ display:block; font-size:12px; color:var(--muted); margin:10px 0 6px; }
-    input, select{
+    input,select{
       width:100%;
       padding:10px 12px;
       border-radius:12px;
@@ -72,6 +92,7 @@
       outline:none;
       font-size:14px;
     }
+    input::placeholder{ color:rgba(255,255,255,.35); }
 
     .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     @media (max-width:560px){ .row2{ grid-template-columns:1fr; } .wrap{ padding:16px; } }
@@ -86,12 +107,14 @@
       cursor:pointer;
       font-size:14px;
     }
-    button.primary{ background:var(--accent); border-color:transparent; color:#09101d; font-weight:700; }
+    button.primary{
+      background:var(--accent);
+      border-color:transparent;
+      color:#09101d;
+      font-weight:800;
+    }
     button:active{ transform:translateY(1px); }
 
-    .hint{ font-size:12px; color:var(--muted); margin:10px 0 0; }
-
-    .mini{ font-size:12px; color:var(--muted); }
     .pill{
       display:inline-block;
       padding:4px 10px;
@@ -102,6 +125,7 @@
       margin-right:6px;
       background:rgba(255,255,255,.03);
     }
+    .mini{ font-size:12px; color:var(--muted); }
 
     .typeBox{
       border:1px solid var(--line);
@@ -110,23 +134,9 @@
       background:rgba(255,255,255,.03);
       margin-top:10px;
     }
-    .typeTitle{ font-weight:800; font-size:16px; margin:0 0 6px; }
+    .typeTitle{ font-weight:900; font-size:16px; margin:0 0 6px; }
     .typeDesc{ margin:0; color:var(--muted); font-size:13px; }
     .typeMeta{ margin-top:8px; color:var(--muted); font-size:12px; }
-
-    .typeImage{
-      width:100%;
-      height:180px;
-      border-radius:12px;
-      border:1px dashed var(--line);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      margin-top:10px;
-      color:var(--muted);
-      font-size:12px;
-      background:rgba(255,255,255,.02);
-    }
 
     textarea{
       width:100%;
@@ -145,109 +155,110 @@
 </head>
 
 <body>
-  <div class="wrap">
-    <header>
-      <h1>クマ占い（20タイプ）</h1>
-      <p class="sub">ボタン1回で「タイプ宣言 → 詳細鑑定」まで出力（HTML/JSだけ）</p>
-    </header>
+<div class="wrap">
+  <header>
+    <h1>クマ占い</h1>
+    <p class="sub">タイプ宣言 → 詳細鑑定（ボタン1回）</p>
+  </header>
 
-    <div class="grid">
-      <!-- 左：入力 -->
-      <div class="card">
-        <p class="sectionTitle">入力</p>
+  <div class="grid">
 
-        <label>名前</label>
-        <input id="name" placeholder="例：かいと" />
+    <!-- =========================================================
+      入力カード
+      ※画面に「開発者注釈」は出さない（コード内コメントのみ）
+    ========================================================== -->
+    <div class="card">
+      <p class="sectionTitle">入力</p>
 
-        <label>生年月日</label>
-        <input id="dob" type="date" />
+      <label>名前</label>
+      <input id="name" placeholder="例：山田 太郎" />
 
-        <div class="row2">
-          <div>
-            <label>出生地（任意）</label>
-            <input id="place" placeholder="例：福岡県" />
-          </div>
-          <div>
-            <label>出生時間（任意）</label>
-            <input id="time" placeholder="例：11:30 / 不明" />
-          </div>
+      <label>生年月日</label>
+      <input id="dob" type="date" />
+
+      <div class="row2">
+        <div>
+          <label>出生地</label>
+          <select id="place"></select>
         </div>
-
-        <label>鑑定スタイル（本文の口調も変わる）</label>
-        <select id="tone">
-          <option value="soft">やさしめ</option>
-          <option value="normal" selected>標準</option>
-          <option value="spicy">毒舌</option>
-        </select>
-
-        <div class="btns">
-          <button class="primary" id="gen">生成（タイプ＋詳細）</button>
-          <button id="copy">コピー</button>
-          <button id="clear">クリア</button>
+        <div>
+          <label>出生時間</label>
+          <select id="time"></select>
         </div>
-
-        <p class="hint">
-          ✅改変しやすい場所：<b>TEXT_DB</b>（口調/タイプ名/説明/本文）<br>
-          ✅イラスト分岐：<b>typeKey</b>（例：FIRE_3）で画像を出し分けできる
-        </p>
       </div>
 
-      <!-- 右：出力 -->
-      <div class="card" id="outputCard">
-        <p class="sectionTitle">出力</p>
+      <label>鑑定スタイル</label>
+      <select id="tone">
+        <option value="soft">やさしめ</option>
+        <option value="normal" selected>標準</option>
+        <option value="spicy">毒舌</option>
+      </select>
 
-        <div class="mini">
-          <span class="pill">星座</span><span id="badgeSign">-</span>
-          <span class="pill">数秘</span><span id="badgeLP">-</span>
-          <span class="pill">年齢</span><span id="badgeAge">-</span>
-        </div>
-
-        <div class="typeBox">
-          <p class="typeTitle" id="typeTitle">タイプ：-</p>
-          <p class="typeDesc" id="typeDesc">生年月日を入れて「生成」を押してね。</p>
-          <div class="typeMeta" id="typeMeta">属性/カテゴリ：-</div>
-          <div class="typeImage" id="typeImage">ここにタイプ別イラストを置ける（後で差し替え）</div>
-        </div>
-
-        <label style="margin-top:12px;">詳細鑑定テキスト</label>
-        <textarea id="out" readonly></textarea>
-
-        <p class="hint">※本格占星術や干支の厳密計算は未搭載（テンプレ運用向け）。</p>
+      <div class="btns">
+        <button class="primary" id="gen">生成</button>
+        <button id="copy">コピー</button>
+        <button id="clear">クリア</button>
       </div>
     </div>
+
+    <!-- =========================================================
+      出力カード（公開用にスッキリ）
+    ========================================================== -->
+    <div class="card" id="outputCard">
+      <p class="sectionTitle">結果</p>
+
+      <div class="mini">
+        <span class="pill">星座</span><span id="badgeSign">-</span>
+        <span class="pill">数秘</span><span id="badgeLP">-</span>
+        <span class="pill">年齢</span><span id="badgeAge">-</span>
+      </div>
+
+      <div class="typeBox">
+        <p class="typeTitle" id="typeTitle">タイプ：-</p>
+        <p class="typeDesc" id="typeDesc">生年月日を入れて「生成」を押してね。</p>
+        <div class="typeMeta" id="typeMeta">-</div>
+      </div>
+
+      <label style="margin-top:12px;">鑑定文</label>
+      <textarea id="out" readonly></textarea>
+    </div>
+
   </div>
+</div>
 
 <script>
 /* =========================================================
-  ✅ 初心者が触ってOK：CONFIG（セクション順）
+  ✅ 初心者が触ってOK：CONFIG
+  - sections：詳細鑑定の表示順（入れ替えOK）
+  - showMeta：本文に「出生地/出生時間」を載せるか（ON/OFF）
 ========================================================= */
 const CONFIG = {
   sections: ["social","overall","work","money","health","love","turning","final"],
+  showMeta: true, // falseにすると本文から「出生地/出生時間」を消せる
 };
 
 /* =========================================================
-  ✅ 初心者が触ってOK：TEXT_DB（文章とタイプ名）
-  - 口調：tones
-  - 星座/数秘：signs, lifepath
-  - 20タイプの命名材料：kumaTypeSeeds
-  - 詳細本文（まずは安定のA/B/C）：archetypes
+  ✅ 初心者が触ってOK：TEXT_DB
+  - tones：やさしめ/標準/毒舌の文章
+  - kumaTypeSeeds：20タイプ命名の材料（後で“完全手打ち20個”にもできる）
+  - archetypes：詳細鑑定（まずはA/B/Cで安定運用）
 ========================================================= */
 const TEXT_DB = {
   tones: {
     soft: {
       header: "今日はあなたの良さと可能性に光を当てて、やさしく読み解いていくね。",
       footer: "焦らなくて大丈夫。小さな一歩を積み重ねるほど、運はあなたの味方になっていくよ。",
-      transformLine: (s) => `${s.replace(/。$/, "")}。あなたならちゃんと形にできるよ。`
+      line: (s) => `${stripPeriod(s)}。あなたならちゃんと形にできるよ。`
     },
     normal: {
       header: "この鑑定は、星座・数秘などから読み取れる傾向を客観的にまとめたものです。",
       footer: "運勢は地図のようなもの。使い方次第で、行き先はいくらでも変えられます。",
-      transformLine: (s) => s
+      line: (s) => s
     },
     spicy: {
       header: "遠慮なしで言う。ここから先は甘くない。でも、伸びるために必要な話だけ書く。",
       footer: "刺さったなら伸びしろ。今日から一個だけ直せば、運は普通に上がる。やるかどうかはあなた次第。",
-      transformLine: (s) => `${s.replace(/。$/, "")}。${pickOne([
+      line: (s) => `${stripPeriod(s)}。${pickOne([
         "…で、いつやるの？",
         "言い訳してる暇ある？",
         "ここで止まると運も止まる。",
@@ -272,18 +283,18 @@ const TEXT_DB = {
   },
 
   lifepath: {
-    1: "始動と自己決定", 2: "協調と調整", 3: "表現と発信",
-    4: "基盤と継続", 5: "変化と挑戦", 6: "愛情と責任",
-    7: "探求と内省", 8: "達成と拡大", 9: "完成と循環",
+    1:"始動と自己決定", 2:"協調と調整", 3:"表現と発信",
+    4:"基盤と継続", 5:"変化と挑戦", 6:"愛情と責任",
+    7:"探求と内省", 8:"達成と拡大", 9:"完成と循環"
   },
 
-  /* ✅ここをいじると20タイプの「名前/説明」が変わる */
+  /* ✅20タイプ命名の材料（ここを変えるとタイプ名/説明が変わる） */
   kumaTypeSeeds: {
     elements: [
-      { key:"FIRE",  name:"火",  vibe:"勢いと突破",       imagePrefix:"fire"  },
-      { key:"EARTH", name:"地",  vibe:"堅実と積み上げ",   imagePrefix:"earth" },
-      { key:"AIR",   name:"風",  vibe:"発想と軽やかさ",   imagePrefix:"air"   },
-      { key:"WATER", name:"水",  vibe:"共感と深み",       imagePrefix:"water" },
+      { key:"FIRE",  name:"火",  vibe:"勢いと突破" },
+      { key:"EARTH", name:"地",  vibe:"堅実と積み上げ" },
+      { key:"AIR",   name:"風",  vibe:"発想と軽やかさ" },
+      { key:"WATER", name:"水",  vibe:"共感と深み" },
     ],
     buckets: [
       { idx:1, name:"安定", desc:"生活と土台を整えるほど運が強い" },
@@ -294,7 +305,7 @@ const TEXT_DB = {
     ],
   },
 
-  /* ✅本文の詳細鑑定：まずは安定運用の3タイプ（後で増やせる） */
+  /* ✅詳細本文：A/B/C（まずは破綻しにくい3本で運用） */
   archetypes: {
     A: {
       name: "後半上昇・大器晩成",
@@ -425,11 +436,49 @@ const TEXT_DB = {
 };
 
 /* =========================================================
-  ここから下は「基本触らない」領域（計算と組み立て）
+  UI初期化（プルダウンの中身）
+  ✅初心者向け：配列を足せば項目が増える
 ========================================================= */
-function $(id){ return document.getElementById(id); }
+const PREFECTURES = [
+  "都道府県",
+  "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
+  "茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県",
+  "新潟県","富山県","石川県","福井県","山梨県","長野県",
+  "岐阜県","静岡県","愛知県","三重県",
+  "滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県",
+  "鳥取県","島根県","岡山県","広島県","山口県",
+  "徳島県","香川県","愛媛県","高知県",
+  "福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"
+];
+
+const TIME_BLOCKS = [
+  "不明",
+  "早朝（5–8）",
+  "午前（8–12）",
+  "昼（12–15）",
+  "夕方（15–18）",
+  "夜（18–22）",
+  "深夜（22–5）"
+];
+
+function initSelect(id, items){
+  const el = document.getElementById(id);
+  el.innerHTML = "";
+  for (const s of items){
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s;
+    el.appendChild(opt);
+  }
+}
+
+/* =========================================================
+  ここから下は「基本触らない」領域（計算・組み立て）
+========================================================= */
+const $ = (id) => document.getElementById(id);
 function pad2(n){ return String(n).padStart(2,"0"); }
 function pickOne(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function stripPeriod(s){ return s.replace(/。$/, ""); }
 
 function calcLifePathNumber(dateObj){
   const s = `${dateObj.getFullYear()}${pad2(dateObj.getMonth()+1)}${pad2(dateObj.getDate())}`;
@@ -438,6 +487,7 @@ function calcLifePathNumber(dateObj){
   while (sum > 9) sum = String(sum).split("").reduce((a,c)=>a+Number(c),0);
   return sum; // 1-9
 }
+
 function calcAge(dateObj){
   const today = new Date();
   let age = today.getFullYear() - dateObj.getFullYear();
@@ -445,6 +495,7 @@ function calcAge(dateObj){
   if (today < birthdayThisYear) age -= 1;
   return age;
 }
+
 function calcZodiacSign(dateObj){
   const m = dateObj.getMonth()+1, d = dateObj.getDate();
   if ((m==1 && d>=20) || (m==2 && d<=18)) return "水瓶座";
@@ -461,7 +512,11 @@ function calcZodiacSign(dateObj){
   return "山羊座";
 }
 
-/* ---- 20タイプ決定（4属性×5カテゴリ＝20） ---- */
+/* ---- 20タイプ決定（4属性×5カテゴリ＝20） ----
+   ✅将来の拡張案：
+   - 出生時間(time)で bucket を微調整（例：夜は“探求”寄り…など）
+   - 出生地(place)で文章の語彙を変える（方言/地域モチーフ）
+*/
 function signToElement(sign){
   const fire  = ["牡羊座","獅子座","射手座"];
   const earth = ["牡牛座","乙女座","山羊座"];
@@ -477,7 +532,7 @@ function lifePathToBucket(lp){
   if (lp === 7 || lp === 8) return 4;    // 探求
   if (lp === 5 || lp === 6) return 3;    // 挑戦
   if (lp === 3 || lp === 4) return 2;    // 伸長
-  return 1;                              // 安定（1,2）
+  return 1;                               // 安定（1,2）
 }
 function pickType20({ sign, lifepath }){
   const elementKey = signToElement(sign);
@@ -486,7 +541,9 @@ function pickType20({ sign, lifepath }){
   return { typeKey, elementKey, bucket };
 }
 
-/* ---- 詳細鑑定の本文タイプ（A/B/C） ---- */
+/* ---- 詳細鑑定の本文タイプ（A/B/C） ----
+   ✅将来：ここを増やして本文タイプを10種類とかにできる
+*/
 function pickDetailArchetypeABC({ sign, lifepath }){
   if (lifepath === 5) return "C";
   if (lifepath === 7) return "A";
@@ -496,33 +553,27 @@ function pickDetailArchetypeABC({ sign, lifepath }){
   return "B";
 }
 
-/* ---- 出力組み立て ---- */
-function applyTone(lines, toneKey){
-  const tone = TEXT_DB.tones[toneKey] ?? TEXT_DB.tones.normal;
-  return lines.map(tone.transformLine);
-}
 function formatDateJP(dateObj){
   return `${dateObj.getFullYear()}/${pad2(dateObj.getMonth()+1)}/${pad2(dateObj.getDate())}`;
 }
 function bullet(lines){
-  return lines.map(s=>`・${s}`).join("\n");
+  return lines.map(s => `・${s}`).join("\n");
 }
+
 function getKumaTypeInfo({ elementKey, bucket }){
   const el = TEXT_DB.kumaTypeSeeds.elements.find(e=>e.key===elementKey);
   const bk = TEXT_DB.kumaTypeSeeds.buckets.find(b=>b.idx===bucket);
 
-  // ✅ここが「20タイプの名前」になる（自由に改造OK）
-  const displayName = `${el.name}${bk.name}グマ`; // 例：火挑戦グマ
-  const oneLiner = `${el.vibe} × ${bk.desc}`;
-
-  // ✅将来のイラスト名の雛形（自由に変更OK）
-  const imageHint = `${el.imagePrefix}-${bucket}.png`; // 例：fire-3.png
-
-  return { displayName, oneLiner, elementName: el.name, bucketName: bk.name, imageHint };
+  // ✅タイプ名：ここを完全手打ちの20個に置き換えてもOK
+  const displayName = `${el.name}${bk.name}グマ`;      // 例：火挑戦グマ
+  const oneLiner = `${el.vibe} × ${bk.desc}`;         // 例：勢いと突破 × 動いたぶんだけ運が動く
+  return { displayName, oneLiner, elementName: el.name, bucketName: bk.name };
 }
 
-function generateAll({ name, place, dobStr, timeStr, toneKey }){
+function buildReading(params){
+  const { name, place, time, dobStr, toneKey } = params;
   const birth = new Date(dobStr);
+
   const lp = calcLifePathNumber(birth);
   const sign = calcZodiacSign(birth);
   const age = calcAge(birth);
@@ -530,40 +581,47 @@ function generateAll({ name, place, dobStr, timeStr, toneKey }){
   const signVibe = TEXT_DB.signs[sign]?.vibe ?? "";
   const lpVibe = TEXT_DB.lifepath[lp] ?? "";
 
+  // 20タイプ
   const { typeKey, elementKey, bucket } = pickType20({ sign, lifepath: lp });
   const kuma = getKumaTypeInfo({ elementKey, bucket });
 
+  // 詳細本文タイプ（A/B/C）
   const abc = pickDetailArchetypeABC({ sign, lifepath: lp });
   const arch = TEXT_DB.archetypes[abc];
+
+  // 口調
   const tone = TEXT_DB.tones[toneKey] ?? TEXT_DB.tones.normal;
 
-  // 画面（バッジ）
+  // ===== 画面表示（短く） =====
   $("badgeSign").textContent = `${sign}（${signVibe}）`;
   $("badgeLP").textContent = `${lp}（${lpVibe}）`;
   $("badgeAge").textContent = `現在：${age}歳目安`;
 
-  // 画面（タイプ宣言）
-  $("typeTitle").textContent = `タイプ：${kuma.displayName}（${typeKey}）`;
+  $("typeTitle").textContent = `タイプ：${kuma.displayName}`;
   $("typeDesc").textContent = kuma.oneLiner;
-  $("typeMeta").textContent = `属性/カテゴリ：${kuma.elementName} / ${kuma.bucketName}（本文タイプ：${abc}）`;
-  $("typeImage").textContent = `イラスト予定：${kuma.imageHint}（例：img/${kuma.imageHint}）`;
+  $("typeMeta").textContent = `タイプキー：${typeKey}`;
 
-  // テキスト出力（タイプ宣言 → 詳細鑑定）
+  // ===== 本文（ユーザーに見せる完成テキスト） =====
+  // ✅ここに「開発注釈」は絶対に入れない方針
   const out = [];
-  out.push(`# 🐻 クマタイプ宣言：${kuma.displayName}`);
+
+  out.push(`# 🐻 クマタイプ：${kuma.displayName}`);
   out.push(`${kuma.oneLiner}`);
-  out.push(`タイプキー：${typeKey}（※イラスト分岐に使える）`);
+  out.push(""); // 1行空ける
+
+  out.push(`# 🔮 詳細鑑定：${name || "（名前未入力）"}`);
   out.push("");
 
-  out.push(`# 🔮 詳細鑑定：**${name || "（名前未入力）"}**`);
-  out.push("");
   out.push(`生年月日：${formatDateJP(birth)}`);
-  out.push(`出生地：${place || "（未入力）"}`);
-  out.push(`出生時間：${(timeStr && timeStr.trim()) ? timeStr.trim() : "不明"}`);
+  if (CONFIG.showMeta){
+    // 公開しても違和感のない範囲で“表示だけ”しておく
+    out.push(`出生地：${place || "都道府県"}`);
+    out.push(`出生時間：${time || "不明"}`);
+  }
   out.push(`星座：${sign}（${signVibe}）`);
   out.push(`数秘：${lp}（${lpVibe}）`);
-  out.push(`本文タイプ：${arch.name}（${abc}）`);
   out.push("");
+
   out.push(tone.header);
   out.push("");
 
@@ -571,42 +629,47 @@ function generateAll({ name, place, dobStr, timeStr, toneKey }){
     const sec = arch[key];
     if (!sec) continue;
     out.push(`## ${sec.title}`);
-    out.push(bullet(applyTone(sec.body, toneKey)));
+    const toned = sec.body.map(tone.line);
+    out.push(bullet(toned));
     out.push("");
   }
 
   out.push(tone.footer);
+
   return out.join("\n");
 }
 
-/* ---- UIイベント ---- */
-$("gen").addEventListener("click", () => {
+/* =========================================================
+  イベント（ボタン類）
+========================================================= */
+function handleGenerate(){
   const dob = $("dob").value;
   if (!dob) return alert("生年月日を入力してね");
 
-  $("out").value = generateAll({
+  const text = buildReading({
     name: $("name").value,
     place: $("place").value,
+    time: $("time").value,
     dobStr: dob,
-    timeStr: $("time").value,
     toneKey: $("tone").value
   });
 
-  $("outputCard").scrollIntoView({ behavior: "smooth", block: "start" });
-});
+  $("out").value = text;
+  $("outputCard").scrollIntoView({ behavior:"smooth", block:"start" });
+}
 
-$("copy").addEventListener("click", async () => {
+async function handleCopy(){
   const text = $("out").value;
   if (!text.trim()) return alert("先に生成してね");
   await navigator.clipboard.writeText(text);
   alert("コピーしたよ");
-});
+}
 
-$("clear").addEventListener("click", () => {
+function handleClear(){
   $("name").value = "";
   $("dob").value = "";
-  $("place").value = "";
-  $("time").value = "";
+  $("place").value = "都道府県";
+  $("time").value = "不明";
   $("tone").value = "normal";
 
   $("badgeSign").textContent = "-";
@@ -615,11 +678,22 @@ $("clear").addEventListener("click", () => {
 
   $("typeTitle").textContent = "タイプ：-";
   $("typeDesc").textContent = "生年月日を入れて「生成」を押してね。";
-  $("typeMeta").textContent = "属性/カテゴリ：-";
-  $("typeImage").textContent = "ここにタイプ別イラストを置ける（後で差し替え）";
+  $("typeMeta").textContent = "-";
 
   $("out").value = "";
-});
+}
+
+/* =========================================================
+  初期化
+========================================================= */
+(function init(){
+  initSelect("place", PREFECTURES);
+  initSelect("time", TIME_BLOCKS);
+
+  $("gen").addEventListener("click", handleGenerate);
+  $("copy").addEventListener("click", handleCopy);
+  $("clear").addEventListener("click", handleClear);
+})();
 </script>
 </body>
 </html>
