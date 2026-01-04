@@ -1,13 +1,16 @@
+<!-- Version: 1  /  2026-01-04 -->
 <!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>クマ占い（タイプ宣言→詳細鑑定）</title>
+  <title>クマ占い（20タイプ）</title>
+
   <style>
-    /* =========================
-      ✅ 初心者が触ってOK：ここだけでデザイン変えられる
-    ========================= */
+    /* =========================================================
+      ✅ 初心者が触ってOK：デザインは基本ここだけ
+      - 色 / 角丸 / 余白 / フォント / 最大幅
+    ========================================================= */
     :root{
       --bg:#0b0b10;
       --panel:#11111a;
@@ -15,15 +18,20 @@
       --muted:rgba(243,243,247,.70);
       --line:rgba(255,255,255,.12);
       --accent:#8ab4ff;
+
       --radius:14px;
       --pad:16px;
       --gap:12px;
       --shadow:0 10px 30px rgba(0,0,0,.35);
+
       --font:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
       --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Noto Sans Mono",monospace;
+
       --max:980px;
     }
+
     *,*::before,*::after{ box-sizing:border-box; }
+
     body{
       margin:0;
       background:
@@ -34,6 +42,7 @@
       font-family:var(--font);
       line-height:1.7;
     }
+
     .wrap{ max-width:var(--max); margin:0 auto; padding:24px; }
     header{ display:flex; flex-direction:column; gap:6px; margin-bottom:16px; }
     h1{ font-size:20px; margin:0; }
@@ -49,6 +58,7 @@
       padding:var(--pad);
       box-shadow:var(--shadow);
     }
+
     .sectionTitle{ font-size:13px; color:var(--muted); margin:0 0 10px; letter-spacing:.02em; }
 
     label{ display:block; font-size:12px; color:var(--muted); margin:10px 0 6px; }
@@ -62,6 +72,7 @@
       outline:none;
       font-size:14px;
     }
+
     .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     @media (max-width:560px){ .row2{ grid-template-columns:1fr; } .wrap{ padding:16px; } }
 
@@ -75,17 +86,11 @@
       cursor:pointer;
       font-size:14px;
     }
-    button.primary{
-      background:var(--accent);
-      border-color:transparent;
-      color:#09101d;
-      font-weight:700;
-    }
+    button.primary{ background:var(--accent); border-color:transparent; color:#09101d; font-weight:700; }
     button:active{ transform:translateY(1px); }
 
     .hint{ font-size:12px; color:var(--muted); margin:10px 0 0; }
 
-    /* 出力側 */
     .mini{ font-size:12px; color:var(--muted); }
     .pill{
       display:inline-block;
@@ -98,7 +103,6 @@
       background:rgba(255,255,255,.03);
     }
 
-    /* ✅ タイプ宣言カード（将来イラスト置き場あり） */
     .typeBox{
       border:1px solid var(--line);
       border-radius:var(--radius);
@@ -108,6 +112,8 @@
     }
     .typeTitle{ font-weight:800; font-size:16px; margin:0 0 6px; }
     .typeDesc{ margin:0; color:var(--muted); font-size:13px; }
+    .typeMeta{ margin-top:8px; color:var(--muted); font-size:12px; }
+
     .typeImage{
       width:100%;
       height:180px;
@@ -135,15 +141,14 @@
       white-space:pre-wrap;
       line-height:1.65;
     }
-
-    .hidden{ display:none; }
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <header>
-      <h1>クマ占い（タイプ宣言 → 詳細鑑定）</h1>
-      <p class="sub">まず「あなたのクマタイプ」を出して、その後に詳しい占いを表示するテンプレ</p>
+      <h1>クマ占い（20タイプ）</h1>
+      <p class="sub">ボタン1回で「タイプ宣言 → 詳細鑑定」まで出力（HTML/JSだけ）</p>
     </header>
 
     <div class="grid">
@@ -176,15 +181,14 @@
         </select>
 
         <div class="btns">
-          <button class="primary" id="btnType">① タイプを出す</button>
-          <button id="btnDetail">② 詳細鑑定を出す</button>
+          <button class="primary" id="gen">生成（タイプ＋詳細）</button>
           <button id="copy">コピー</button>
           <button id="clear">クリア</button>
         </div>
 
         <p class="hint">
-          ✅改変しやすい場所：<b>TEXT_DB</b>（タイプ名・説明・文章） / CSSの<b>:root</b><br>
-          ※「②詳細鑑定」は①でタイプ確定後に押すのが前提
+          ✅改変しやすい場所：<b>TEXT_DB</b>（口調/タイプ名/説明/本文）<br>
+          ✅イラスト分岐：<b>typeKey</b>（例：FIRE_3）で画像を出し分けできる
         </p>
       </div>
 
@@ -198,47 +202,42 @@
           <span class="pill">年齢</span><span id="badgeAge">-</span>
         </div>
 
-        <!-- ✅ ステップ1：タイプ宣言 -->
-        <div class="typeBox" id="typeBox">
+        <div class="typeBox">
           <p class="typeTitle" id="typeTitle">タイプ：-</p>
-          <p class="typeDesc" id="typeDesc">まず「①タイプを出す」を押してね。</p>
-
-          <!-- ✅ 将来ここに画像を差し替える -->
-          <!-- 例：<img class="typeImageReal" src="img/kuma-a.png" alt="クマタイプA"> -->
+          <p class="typeDesc" id="typeDesc">生年月日を入れて「生成」を押してね。</p>
+          <div class="typeMeta" id="typeMeta">属性/カテゴリ：-</div>
           <div class="typeImage" id="typeImage">ここにタイプ別イラストを置ける（後で差し替え）</div>
         </div>
 
-        <!-- ✅ ステップ2：詳細鑑定 -->
-        <div id="detailArea" class="hidden">
-          <label style="margin-top:12px;">詳細鑑定テキスト</label>
-          <textarea id="out" readonly></textarea>
-        </div>
+        <label style="margin-top:12px;">詳細鑑定テキスト</label>
+        <textarea id="out" readonly></textarea>
 
-        <p class="hint">※イラスト連携は「typeKey（A/B/C）」で分岐できるようにしてある。</p>
+        <p class="hint">※本格占星術や干支の厳密計算は未搭載（テンプレ運用向け）。</p>
       </div>
     </div>
   </div>
 
 <script>
 /* =========================================================
-  ✅ 改変OK：CONFIG（出力順など）
+  ✅ 初心者が触ってOK：CONFIG（セクション順）
 ========================================================= */
 const CONFIG = {
   sections: ["social","overall","work","money","health","love","turning","final"],
 };
 
 /* =========================================================
-  ✅ 改変OK：TEXT_DB（文章・タイプ・口調・将来のイラスト紐付け）
+  ✅ 初心者が触ってOK：TEXT_DB（文章とタイプ名）
+  - 口調：tones
+  - 星座/数秘：signs, lifepath
+  - 20タイプの命名材料：kumaTypeSeeds
+  - 詳細本文（まずは安定のA/B/C）：archetypes
 ========================================================= */
 const TEXT_DB = {
   tones: {
     soft: {
       header: "今日はあなたの良さと可能性に光を当てて、やさしく読み解いていくね。",
       footer: "焦らなくて大丈夫。小さな一歩を積み重ねるほど、運はあなたの味方になっていくよ。",
-      transformLine: (s) => {
-        const base = s.replace(/。$/, "");
-        return `${base}。あなたならちゃんと形にできるよ。`;
-      }
+      transformLine: (s) => `${s.replace(/。$/, "")}。あなたならちゃんと形にできるよ。`
     },
     normal: {
       header: "この鑑定は、星座・数秘などから読み取れる傾向を客観的にまとめたものです。",
@@ -248,16 +247,12 @@ const TEXT_DB = {
     spicy: {
       header: "遠慮なしで言う。ここから先は甘くない。でも、伸びるために必要な話だけ書く。",
       footer: "刺さったなら伸びしろ。今日から一個だけ直せば、運は普通に上がる。やるかどうかはあなた次第。",
-      transformLine: (s) => {
-        const base = s.replace(/。$/, "");
-        const punch = pickOne([
-          "…で、いつやるの？",
-          "言い訳してる暇ある？",
-          "ここで止まると運も止まる。",
-          "やる人だけが回収する。"
-        ]);
-        return `${base}。${punch}`;
-      }
+      transformLine: (s) => `${s.replace(/。$/, "")}。${pickOne([
+        "…で、いつやるの？",
+        "言い訳してる暇ある？",
+        "ここで止まると運も止まる。",
+        "やる人だけが回収する。"
+      ])}`
     }
   },
 
@@ -277,166 +272,160 @@ const TEXT_DB = {
   },
 
   lifepath: {
-    1: "始動と自己決定",
-    2: "協調と調整",
-    3: "表現と発信",
-    4: "基盤と継続",
-    5: "変化と挑戦",
-    6: "愛情と責任",
-    7: "探求と内省",
-    8: "達成と拡大",
-    9: "完成と循環",
+    1: "始動と自己決定", 2: "協調と調整", 3: "表現と発信",
+    4: "基盤と継続", 5: "変化と挑戦", 6: "愛情と責任",
+    7: "探求と内省", 8: "達成と拡大", 9: "完成と循環",
   },
 
-  /* ✅ “タイプ宣言”に使う情報（クマ占い向けに命名OK） */
-  kumaTypes: {
-    A: {
-      displayName: "コツコツ貯金グマ",
-      oneLiner: "静かに積み上げて、後半で大きく回収するタイプ。",
-      imageHint: "例：kuma-a.png"
-    },
-    B: {
-      displayName: "安定まもりグマ",
-      oneLiner: "生活と人間関係を整えるほど運が強くなるタイプ。",
-      imageHint: "例：kuma-b.png"
-    },
-    C: {
-      displayName: "挑戦とびだしグマ",
-      oneLiner: "変化と挑戦で運が動くタイプ。動いた分だけ縁が増える。",
-      imageHint: "例：kuma-c.png"
-    }
+  /* ✅ここをいじると20タイプの「名前/説明」が変わる */
+  kumaTypeSeeds: {
+    elements: [
+      { key:"FIRE",  name:"火",  vibe:"勢いと突破",       imagePrefix:"fire"  },
+      { key:"EARTH", name:"地",  vibe:"堅実と積み上げ",   imagePrefix:"earth" },
+      { key:"AIR",   name:"風",  vibe:"発想と軽やかさ",   imagePrefix:"air"   },
+      { key:"WATER", name:"水",  vibe:"共感と深み",       imagePrefix:"water" },
+    ],
+    buckets: [
+      { idx:1, name:"安定", desc:"生活と土台を整えるほど運が強い" },
+      { idx:2, name:"伸長", desc:"コツコツ成長して評価を積む" },
+      { idx:3, name:"挑戦", desc:"動いたぶんだけ運が動く" },
+      { idx:4, name:"探求", desc:"深掘りで精度が上がる" },
+      { idx:5, name:"完成", desc:"整理と手放しで一段上に行く" },
+    ],
   },
 
-  /* 詳細鑑定（型：A/B/C） */
+  /* ✅本文の詳細鑑定：まずは安定運用の3タイプ（後で増やせる） */
   archetypes: {
     A: {
       name: "後半上昇・大器晩成",
-      social: { title: "🧑‍🤝‍🧑 社会キャラ", body: [
+      social:{title:"🧑‍🤝‍🧑 社会キャラ", body:[
         "第一印象は落ち着きと誠実さが出やすい。",
         "派手に目立つより、信頼の積み重ねで評価が上がる。",
-        "距離が縮むほど面倒見が良く、自然とまとめ役になりやすい。"
+        "距離が縮むほど面倒見が良く、まとめ役になりやすい。"
       ]},
-      overall: { title: "🌍 全体運", body: [
+      overall:{title:"🌍 全体運", body:[
         "人生は後半ほど満足度が上がりやすい。",
         "土台づくりを丁寧に過ごすほど、後で大きく回収しやすい。",
         "焦りよりも継続が運勢を強める。"
       ]},
-      work: { title: "💼 仕事運", body: [
+      work:{title:"💼 仕事運", body:[
         "企画・表現・発信・プロデュース寄りで伸びやすい。",
-        "個人裁量が大きいほど力を出しやすく、積み上げ型で強くなる。",
+        "個人裁量が大きいほど力を出しやすく、積み上げ型で強い。",
         "基礎を作ったあとに評価が追いつきやすい。"
       ]},
-      money: { title: "💰 金運", body: [
+      money:{title:"💰 金運", body:[
         "波は出やすいが回収力が強い。",
-        "管理（固定費・仕組み化）を整えるほど安定しやすい。",
+        "固定費やルールを整えるほど安定しやすい。",
         "長期視点の蓄積と相性が良い。"
       ]},
-      health: { title: "🫁 健康運", body: [
-        "ストレスが溜まると神経・睡眠リズムに出やすい。",
+      health:{title:"🫁 健康運", body:[
+        "ストレスが睡眠リズムに出やすい。",
         "休養は運勢維持の要になりやすい。",
-        "無理を溜めない設計にすると運が落ちにくい。"
+        "無理を溜めない設計が開運になる。"
       ]},
-      love: { title: "❤️ 恋愛運", body: [
+      love:{title:"❤️ 恋愛運", body:[
         "軽い恋より、人生を整える関係に縁が出やすい。",
         "仕事や生活の安定と恋愛運が連動しやすい。",
-        "精神的に自立した相手と相性が良い。"
+        "精神的に自立した相手と好相性。"
       ]},
-      turning: { title: "🧭 流れの切り替わり", body: [
-        "基礎工事 → 評価が見える → 安定拡張 → 完成、の順で強くなりやすい。",
-        "一気に変えるより、積んで効かせる方が勝ちやすい。"
+      turning:{title:"🧭 流れの切り替わり", body:[
+        "基礎工事 → 評価 → 安定拡張 → 完成、の順で強くなりやすい。",
+        "一気に変えるより、積んで効かせる方が勝てる。"
       ]},
-      final: { title: "🕊 最終評価", body: [
+      final:{title:"🕊 最終評価", body:[
         "静かに積み上げ、後半で大きく報われる配置。",
-        "最終的な人生満足度を高めやすいタイプ。"
+        "人生満足度を高めやすいタイプ。"
       ]}
     },
+
     B: {
       name: "安定成長・堅実積み上げ",
-      social: { title: "🧑‍🤝‍🧑 社会キャラ", body: [
-        "穏やかで信頼されやすい印象が出やすい。",
+      social:{title:"🧑‍🤝‍🧑 社会キャラ", body:[
+        "穏やかで信頼されやすい。",
         "約束を守る・継続することで評価が固まる。",
         "調整役・実務で頼られやすい。"
       ]},
-      overall: { title: "🌍 全体運", body: [
+      overall:{title:"🌍 全体運", body:[
         "大波乱は少なく、安定して積み上がりやすい。",
         "生活基盤が整うほど運が強くなる。",
         "長期的な安心感を作るのが得意。"
       ]},
-      work: { title: "💼 仕事運", body: [
+      work:{title:"💼 仕事運", body:[
         "管理・調整・実務の軸で評価が上がる。",
         "責任ある役割ほど信頼が積もる。",
-        "コツコツ型の成果が後で大きく効く。"
+        "コツコツ型の成果が後で効く。"
       ]},
-      money: { title: "💰 金運", body: [
+      money:{title:"💰 金運", body:[
         "蓄積型で守りが強い。",
         "固定費の最適化が一番効く。",
-        "一攫千金より堅実な増やし方が向く。"
+        "堅実な増やし方が向く。"
       ]},
-      health: { title: "🫁 健康運", body: [
+      health:{title:"🫁 健康運", body:[
         "疲労が睡眠に出やすい。",
-        "休養を仕組み化すると安定しやすい。",
+        "休養を仕組み化すると安定。",
         "ルーティンが健康運を底上げする。"
       ]},
-      love: { title: "❤️ 恋愛運", body: [
+      love:{title:"❤️ 恋愛運", body:[
         "長期安定の恋愛に強い。",
         "関係が育つほど安心感が増す。",
         "家庭運が人生の基盤になりやすい。"
       ]},
-      turning: { title: "🧭 流れの切り替わり", body: [
+      turning:{title:"🧭 流れの切り替わり", body:[
         "安定 → 役割増 → 信頼固定 → 生活完成、の順で良くなりやすい。",
-        "大勝負より、良い習慣の積み上げが運を上げる。"
+        "良い習慣の積み上げが運を上げる。"
       ]},
-      final: { title: "🕊 最終評価", body: [
-        "長期的な安定と満足を作りやすい配置。",
-        "人生全体の安心感が増えていくタイプ。"
+      final:{title:"🕊 最終評価", body:[
+        "長期的な安定と満足を作りやすい。",
+        "安心感が増えていくタイプ。"
       ]}
     },
+
     C: {
       name: "変化適応・挑戦で伸びる",
-      social: { title: "🧑‍🤝‍🧑 社会キャラ", body: [
+      social:{title:"🧑‍🤝‍🧑 社会キャラ", body:[
         "話題性・行動力が評価されやすい。",
-        "新しい場所で伸びるタイプ。",
+        "新しい場所で伸びる。",
         "変化があるほど魅力が出る。"
       ]},
-      overall: { title: "🌍 全体運", body: [
+      overall:{title:"🌍 全体運", body:[
         "停滞より変化で運が動く。",
-        "新規挑戦の数が未来を作りやすい。",
+        "新規挑戦の数が未来を作る。",
         "柔軟な切り替えが強み。"
       ]},
-      work: { title: "💼 仕事運", body: [
+      work:{title:"💼 仕事運", body:[
         "新規・企画・拡張に強い。",
         "単調さより変化のある環境が合う。",
         "動きながら整えると成果が出やすい。"
       ]},
-      money: { title: "💰 金運", body: [
+      money:{title:"💰 金運", body:[
         "収入源を複線化すると強い。",
         "勢いで増えるが管理が弱いと減りやすい。",
         "仕組み化が安定の鍵。"
       ]},
-      health: { title: "🫁 健康運", body: [
+      health:{title:"🫁 健康運", body:[
         "テンションの上下が体に出やすい。",
-        "睡眠と食事の固定が運の土台。",
+        "睡眠と食事の固定が土台。",
         "休む日を決めると安定する。"
       ]},
-      love: { title: "❤️ 恋愛運", body: [
+      love:{title:"❤️ 恋愛運", body:[
         "出会いが多く、動くほど縁が増える。",
         "勢いで決めすぎない見極めが大事。",
         "相手と未来設計できると強い。"
       ]},
-      turning: { title: "🧭 流れの切り替わり", body: [
-        "挑戦 → 適応 → 仕組み化 → 安定、の順で強くなりやすい。",
+      turning:{title:"🧭 流れの切り替わり", body:[
+        "挑戦 → 適応 → 仕組み化 → 安定、の順で強くなる。",
         "挑戦が止まると運も止まりやすい。"
       ]},
-      final: { title: "🕊 最終評価", body: [
-        "変化を味方につけるほど上がる配置。",
-        "挑戦の数が人生の厚みになるタイプ。"
+      final:{title:"🕊 最終評価", body:[
+        "変化を味方につけるほど上がる。",
+        "挑戦の数が人生の厚みになる。"
       ]}
-    }
+    },
   }
 };
 
 /* =========================================================
-  ❶ 計算（初心者は触らなくてOK）
+  ここから下は「基本触らない」領域（計算と組み立て）
 ========================================================= */
 function $(id){ return document.getElementById(id); }
 function pad2(n){ return String(n).padStart(2,"0"); }
@@ -457,8 +446,7 @@ function calcAge(dateObj){
   return age;
 }
 function calcZodiacSign(dateObj){
-  const m = dateObj.getMonth()+1;
-  const d = dateObj.getDate();
+  const m = dateObj.getMonth()+1, d = dateObj.getDate();
   if ((m==1 && d>=20) || (m==2 && d<=18)) return "水瓶座";
   if ((m==2 && d>=19) || (m==3 && d<=20)) return "魚座";
   if ((m==3 && d>=21) || (m==4 && d<=19)) return "牡羊座";
@@ -473,10 +461,33 @@ function calcZodiacSign(dateObj){
   return "山羊座";
 }
 
-/* =========================================================
-  ❷ タイプ判定（A/B/C）＝今後ここを増やせる
-========================================================= */
-function pickArchetype({ sign, lifepath }){
+/* ---- 20タイプ決定（4属性×5カテゴリ＝20） ---- */
+function signToElement(sign){
+  const fire  = ["牡羊座","獅子座","射手座"];
+  const earth = ["牡牛座","乙女座","山羊座"];
+  const air   = ["双子座","天秤座","水瓶座"];
+  const water = ["蟹座","蠍座","魚座"];
+  if (fire.includes(sign)) return "FIRE";
+  if (earth.includes(sign)) return "EARTH";
+  if (air.includes(sign)) return "AIR";
+  return "WATER";
+}
+function lifePathToBucket(lp){
+  if (lp === 9) return 5;                // 完成
+  if (lp === 7 || lp === 8) return 4;    // 探求
+  if (lp === 5 || lp === 6) return 3;    // 挑戦
+  if (lp === 3 || lp === 4) return 2;    // 伸長
+  return 1;                              // 安定（1,2）
+}
+function pickType20({ sign, lifepath }){
+  const elementKey = signToElement(sign);
+  const bucket = lifePathToBucket(lifepath);
+  const typeKey = `${elementKey}_${bucket}`; // 例：FIRE_3
+  return { typeKey, elementKey, bucket };
+}
+
+/* ---- 詳細鑑定の本文タイプ（A/B/C） ---- */
+function pickDetailArchetypeABC({ sign, lifepath }){
   if (lifepath === 5) return "C";
   if (lifepath === 7) return "A";
   if (["山羊座","乙女座","牡牛座"].includes(sign)) return (lifepath === 4 || lifepath === 8) ? "A" : "B";
@@ -485,32 +496,7 @@ function pickArchetype({ sign, lifepath }){
   return "B";
 }
 
-/* =========================================================
-  ❸ ステップ1：タイプ宣言を生成（将来イラスト紐付けの要）
-========================================================= */
-function declareType({ dobStr }){
-  const birth = new Date(dobStr);
-  const lp = calcLifePathNumber(birth);
-  const sign = calcZodiacSign(birth);
-  const age = calcAge(birth);
-
-  const typeKey = pickArchetype({ sign, lifepath: lp });
-  const kuma = TEXT_DB.kumaTypes[typeKey];
-
-  const signVibe = TEXT_DB.signs[sign]?.vibe ?? "";
-  const lpVibe = TEXT_DB.lifepath[lp] ?? "";
-
-  // バッジ更新（タイプ宣言段階でも出す）
-  $("badgeSign").textContent = `${sign}（${signVibe}）`;
-  $("badgeLP").textContent = `${lp}（${lpVibe}）`;
-  $("badgeAge").textContent = `現在：${age}歳目安`;
-
-  return { typeKey, kuma, sign, lp, age };
-}
-
-/* =========================================================
-  ❹ ステップ2：詳細鑑定を生成（トーン反映：本文も変わる）
-========================================================= */
+/* ---- 出力組み立て ---- */
 function applyTone(lines, toneKey){
   const tone = TEXT_DB.tones[toneKey] ?? TEXT_DB.tones.normal;
   return lines.map(tone.transformLine);
@@ -521,16 +507,54 @@ function formatDateJP(dateObj){
 function bullet(lines){
   return lines.map(s=>`・${s}`).join("\n");
 }
+function getKumaTypeInfo({ elementKey, bucket }){
+  const el = TEXT_DB.kumaTypeSeeds.elements.find(e=>e.key===elementKey);
+  const bk = TEXT_DB.kumaTypeSeeds.buckets.find(b=>b.idx===bucket);
 
-function buildDetailReading({ name, place, dobStr, timeStr, toneKey, typeKey, sign, lp }){
+  // ✅ここが「20タイプの名前」になる（自由に改造OK）
+  const displayName = `${el.name}${bk.name}グマ`; // 例：火挑戦グマ
+  const oneLiner = `${el.vibe} × ${bk.desc}`;
+
+  // ✅将来のイラスト名の雛形（自由に変更OK）
+  const imageHint = `${el.imagePrefix}-${bucket}.png`; // 例：fire-3.png
+
+  return { displayName, oneLiner, elementName: el.name, bucketName: bk.name, imageHint };
+}
+
+function generateAll({ name, place, dobStr, timeStr, toneKey }){
   const birth = new Date(dobStr);
-  const arch = TEXT_DB.archetypes[typeKey];
-  const tone = TEXT_DB.tones[toneKey] ?? TEXT_DB.tones.normal;
+  const lp = calcLifePathNumber(birth);
+  const sign = calcZodiacSign(birth);
+  const age = calcAge(birth);
 
   const signVibe = TEXT_DB.signs[sign]?.vibe ?? "";
   const lpVibe = TEXT_DB.lifepath[lp] ?? "";
 
+  const { typeKey, elementKey, bucket } = pickType20({ sign, lifepath: lp });
+  const kuma = getKumaTypeInfo({ elementKey, bucket });
+
+  const abc = pickDetailArchetypeABC({ sign, lifepath: lp });
+  const arch = TEXT_DB.archetypes[abc];
+  const tone = TEXT_DB.tones[toneKey] ?? TEXT_DB.tones.normal;
+
+  // 画面（バッジ）
+  $("badgeSign").textContent = `${sign}（${signVibe}）`;
+  $("badgeLP").textContent = `${lp}（${lpVibe}）`;
+  $("badgeAge").textContent = `現在：${age}歳目安`;
+
+  // 画面（タイプ宣言）
+  $("typeTitle").textContent = `タイプ：${kuma.displayName}（${typeKey}）`;
+  $("typeDesc").textContent = kuma.oneLiner;
+  $("typeMeta").textContent = `属性/カテゴリ：${kuma.elementName} / ${kuma.bucketName}（本文タイプ：${abc}）`;
+  $("typeImage").textContent = `イラスト予定：${kuma.imageHint}（例：img/${kuma.imageHint}）`;
+
+  // テキスト出力（タイプ宣言 → 詳細鑑定）
   const out = [];
+  out.push(`# 🐻 クマタイプ宣言：${kuma.displayName}`);
+  out.push(`${kuma.oneLiner}`);
+  out.push(`タイプキー：${typeKey}（※イラスト分岐に使える）`);
+  out.push("");
+
   out.push(`# 🔮 詳細鑑定：**${name || "（名前未入力）"}**`);
   out.push("");
   out.push(`生年月日：${formatDateJP(birth)}`);
@@ -538,7 +562,7 @@ function buildDetailReading({ name, place, dobStr, timeStr, toneKey, typeKey, si
   out.push(`出生時間：${(timeStr && timeStr.trim()) ? timeStr.trim() : "不明"}`);
   out.push(`星座：${sign}（${signVibe}）`);
   out.push(`数秘：${lp}（${lpVibe}）`);
-  out.push(`鑑定タイプ：${arch.name}（テンプレ）`);
+  out.push(`本文タイプ：${arch.name}（${abc}）`);
   out.push("");
   out.push(tone.header);
   out.push("");
@@ -555,55 +579,25 @@ function buildDetailReading({ name, place, dobStr, timeStr, toneKey, typeKey, si
   return out.join("\n");
 }
 
-/* =========================================================
-  UI：ボタン動作（2段階）
-========================================================= */
-let lastState = null; // ①で確定したタイプ情報を保持
-
-$("btnType").addEventListener("click", () => {
+/* ---- UIイベント ---- */
+$("gen").addEventListener("click", () => {
   const dob = $("dob").value;
   if (!dob) return alert("生年月日を入力してね");
 
-  // タイプ宣言
-  const declared = declareType({ dobStr: dob });
-  lastState = declared;
-
-  $("typeTitle").textContent = `タイプ：${declared.kuma.displayName}（${declared.typeKey}）`;
-  $("typeDesc").textContent = declared.kuma.oneLiner;
-  $("typeImage").textContent = `イラスト予定：${declared.kuma.imageHint}（ここに画像を差し替え）`;
-
-  // 詳細はまだ非表示（ステップの体験を分ける）
-  $("detailArea").classList.add("hidden");
-  $("out").value = "";
-
-  $("outputCard").scrollIntoView({ behavior: "smooth", block: "start" });
-});
-
-$("btnDetail").addEventListener("click", () => {
-  const dob = $("dob").value;
-  if (!dob) return alert("生年月日を入力してね");
-  if (!lastState) return alert("先に「①タイプを出す」を押してね");
-
-  const result = buildDetailReading({
+  $("out").value = generateAll({
     name: $("name").value,
     place: $("place").value,
     dobStr: dob,
     timeStr: $("time").value,
-    toneKey: $("tone").value,
-    typeKey: lastState.typeKey,
-    sign: lastState.sign,
-    lp: lastState.lp
+    toneKey: $("tone").value
   });
-
-  $("out").value = result;
-  $("detailArea").classList.remove("hidden");
 
   $("outputCard").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 $("copy").addEventListener("click", async () => {
   const text = $("out").value;
-  if (!text.trim()) return alert("先に②詳細鑑定を出してね");
+  if (!text.trim()) return alert("先に生成してね");
   await navigator.clipboard.writeText(text);
   alert("コピーしたよ");
 });
@@ -620,13 +614,11 @@ $("clear").addEventListener("click", () => {
   $("badgeAge").textContent = "-";
 
   $("typeTitle").textContent = "タイプ：-";
-  $("typeDesc").textContent = "まず「①タイプを出す」を押してね。";
+  $("typeDesc").textContent = "生年月日を入れて「生成」を押してね。";
+  $("typeMeta").textContent = "属性/カテゴリ：-";
   $("typeImage").textContent = "ここにタイプ別イラストを置ける（後で差し替え）";
 
-  $("detailArea").classList.add("hidden");
   $("out").value = "";
-
-  lastState = null;
 });
 </script>
 </body>
