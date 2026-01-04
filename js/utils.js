@@ -1,11 +1,10 @@
 /*
-  utils.js / Version 1
+  utils.js / Version 2
   ------------------------------------------------------------
-  いじりたい人向け：汎用処理
+  目的：同じ入力なら同じ結果にしたい（当たり感を出す）
 */
 
 export function hash01(str){
-  // 0.0000〜0.9999の決定的乱数
   let h = 2166136261;
   for (let i=0; i<str.length; i++){
     h ^= str.charCodeAt(i);
@@ -20,18 +19,25 @@ export function pickDeterministic(list, seedStr){
   return list[Math.min(idx, list.length - 1)];
 }
 
-export function uniq3(list, seedBase){
-  // 同じものが出たらseedをずらして3つ作る（初心者でも追える）
+export function pickMany(list, seedBase, count){
   const out = [];
-  let n = 0;
-  while (out.length < 3 && n < 30){
-    const item = pickDeterministic(list, `${seedBase}|${n}`);
-    if (!out.includes(item)) out.push(item);
-    n++;
+  for (let i=0; i<count; i++){
+    const item = pickDeterministic(list, `${seedBase}|${i}`);
+    out.push(item);
   }
-  // 足りない時はそのまま
-  while (out.length < 3) out.push(list[out.length % list.length]);
-  return out.slice(0,3);
+  return out;
+}
+
+export function uniqN(list, seedBase, n){
+  const out = [];
+  let k = 0;
+  while (out.length < n && k < 60){
+    const item = pickDeterministic(list, `${seedBase}|${k}`);
+    if (!out.includes(item)) out.push(item);
+    k++;
+  }
+  while (out.length < n) out.push(list[out.length % list.length]);
+  return out.slice(0,n);
 }
 
 export function pad2(n){ return String(n).padStart(2, "0"); }
