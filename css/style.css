@@ -220,8 +220,4 @@ textarea{
   font-weight: 900;
 }
 
-/* iOS/一部ブラウザで要素がタップできなくなる系の最小安全パッチ */
-.card::before, .card::after {
-  pointer-events: none;
-}
 
