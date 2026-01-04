@@ -16,8 +16,60 @@
   - name/kana: 名前とふりがな（任意、kanaがあると名前補正が効く）
 */
 
-import { hashString, mulberry32, clamp } from "./utils.js";
-import { TYPES } from "./data.js";
+/* =========================================================
+  fortune.js / Version 10
+  開発者メモ：
+  - ES Modules(import/export)は使わない（初心者向け）
+  - 依存は window.Utils / window.TYPES / window.TEXT_DB などを参照する
+========================================================= */
+
+(function () {
+  "use strict";
+
+  // utils（utils.jsで window.Utils を定義済み）
+  const { hashString, mulberry32, clamp } = window.Utils || {};
+
+  // data（data.jsで window.TYPES を定義している想定）
+  const TYPES = window.TYPES;
+
+  // 依存チェック（ここで落ちると原因が一発で分かる）
+  if (!hashString || !mulberry32 || !clamp) {
+    console.error("[fortune.js] Utils not loaded. window.Utils =", window.Utils);
+    return;
+  }
+  if (!TYPES) {
+    console.error("[fortune.js] TYPES not loaded. window.TYPES is undefined.");
+    return;
+  }
+
+  /* =========================================================
+    ここから下は “占いロジック本体”
+    ※あなたの既存ロジックをこの中にそのまま置いてOK
+    （今回の回答では「土台だけ」作る。既存ロジックが別にあるなら貼って）
+  ========================================================= */
+
+  // 例：seed生成（同じ入力→同じ結果）
+  function makeSeed({ name, kana, dob, pref, timeValue }) {
+    const base = `${name || ""}|${kana || ""}|${dob || ""}|${pref || ""}|${timeValue || ""}`;
+    return hashString(base);
+  }
+
+  // 例：タイプ決定（仮：既存ロジックに置き換えてOK）
+  function pickTypeKey({ seed }) {
+    const keys = Object.keys(TYPES);
+    const rnd = mulberry32(seed);
+    const idx = clamp(Math.floor(rnd() * keys.length), 0, keys.length - 1);
+    return keys[idx];
+  }
+
+  // 外部公開：app.js から呼べるようにする
+  window.Fortune = {
+    makeSeed,
+    pickTypeKey,
+    TYPES,
+  };
+})();
+
 
 /* ---------------------------
   占星術（出生時間なしの範囲）
