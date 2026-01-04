@@ -1,9 +1,8 @@
 /* =========================================================================
-  Version 11  app.js  (FULL)
-  - index.html の time UI（不明/入力 + 時 + 00/30）に対応
-  - badgeType / badgeAxis / badgeLevel を更新
-  - fortune.js は window.FortuneEngine.run を呼ぶ想定
-  - data.js は POOLS を後で再構築（無くても落ちない）
+  app.js / Version 10 (patched)
+  - index.html の time UI（不明/入力する + 時 + 00/30）に対応
+  - バッジは index.html の badgeType / badgeAxis / badgeLevel を更新
+  - data.js の POOLS / TYPES 前提（次に再構築する）
 ============================================================================ */
 
 const $ = (sel) => document.querySelector(sel);
@@ -12,16 +11,15 @@ function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
-
 function setValue(id, val) {
   const el = document.getElementById(id);
   if (el) el.value = val ?? "";
 }
 
 /* =========================
-  入力保存（セッション残す）
+  入力保存
 ========================= */
-const STORAGE_KEY = "fortune_generator_v11_inputs";
+const STORAGE_KEY = "fortune_generator_v10_inputs";
 
 function loadInputs() {
   try {
@@ -32,15 +30,12 @@ function loadInputs() {
     return null;
   }
 }
-
 function saveInputs(payload) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch {}
 }
 
 /* =========================
-  文章選択のための “決定的”乱数
+  決定的乱数
 ========================= */
 function xfnv1a(str) {
   let h = 2166136261 >>> 0;
@@ -50,7 +45,6 @@ function xfnv1a(str) {
   }
   return h >>> 0;
 }
-
 function mulberry32(seed) {
   let a = seed >>> 0;
   return function () {
@@ -61,7 +55,6 @@ function mulberry32(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-
 function pickDeterministic(arr, seed, salt = "") {
   if (!Array.isArray(arr) || arr.length === 0) return "";
   const h = xfnv1a(String(seed) + "::" + salt);
@@ -71,7 +64,7 @@ function pickDeterministic(arr, seed, salt = "") {
 }
 
 /* =========================
-  スコア → high/mid/low
+  スコア → band
 ========================= */
 function toBand(score) {
   if (typeof score !== "number" || Number.isNaN(score)) return "mid";
@@ -81,10 +74,12 @@ function toBand(score) {
 }
 
 /* =========================
-  toneキー正規化
+  tone正規化
 ========================= */
 function normalizeTone(uiToneValue) {
-  if (uiToneValue === "soft" || uiToneValue === "standard" || uiToneValue === "toxic") return uiToneValue;
+  if (uiToneValue === "soft" || uiToneValue === "standard" || uiToneValue === "toxic") {
+    return uiToneValue;
+  }
   return "standard";
 }
 
@@ -92,26 +87,34 @@ function normalizeTone(uiToneValue) {
   fortune.js 呼び出し
 ========================= */
 function runFortuneEngine(input) {
-  const engine = window.FortuneEngine || window.Fortune || null;
-  const fn =
-    engine?.run ||
-    engine?.calc ||
-    engine?.getResult ||
-    engine?.generate ||
-    window.runFortune ||
-    window.calcFortune ||
+  const engine =
+    window.FortuneEngine ||
+    window.fortune ||
+    window.Fortune ||
+    window.fortuneEngine ||
     null;
 
-  if (!fn) {
+  const candidates = [
+    engine?.run,
+    engine?.calc,
+    engine?.getResult,
+    engine?.generate,
+    engine?.makeResult,
+    window.runFortune,
+    window.calcFortune,
+    window.getFortuneResult,
+  ].filter(Boolean);
+
+  if (candidates.length === 0) {
     return {
       typeKey: "t01",
       scores: { overall: 50, work: 50, money: 50, love: 50, health: 50 },
-      meta: { axis: "（不明）", level: "（fortune.js 未接続）" },
+      meta: { axis: "-", level: "fortune.js が見つからないためダミー表示" },
     };
   }
 
-  const out = fn(input);
-  return out;
+  const fn = candidates[0];
+  return fn(input);
 }
 
 async function getFortuneResult(input) {
@@ -130,26 +133,15 @@ async function getFortuneResult(input) {
   normalized.scores.love ??= result?.loveScore ?? 50;
   normalized.scores.health ??= result?.healthScore ?? 50;
 
-  normalized.meta.axis ??= "（不明）";
-  normalized.meta.level ??= "標準（出生時間なし）";
-
   return normalized;
 }
 
 /* =========================
-  data.js（POOLS）から文章を組み立てる
+  出力テキスト組み立て（POOLS）
 ========================= */
 function buildSectionsText({ toneKey, result, seedBase }) {
   const sections = ["overall", "work", "money", "love", "health"];
   const out = [];
-
-  const titles = {
-    overall: "🌍 全体運",
-    work: "💼 仕事運",
-    money: "💰 金運",
-    love: "❤️ 恋愛運",
-    health: "🫁 健康運",
-  };
 
   for (const sec of sections) {
     const score = result.scores?.[sec];
@@ -157,6 +149,14 @@ function buildSectionsText({ toneKey, result, seedBase }) {
 
     const pool = window.POOLS?.sections?.[sec]?.[toneKey]?.[band];
     const chosen = pickDeterministic(pool, seedBase, `${sec}:${toneKey}:${band}:${result.typeKey}`);
+
+    const titles = {
+      overall: "🌍 全体運",
+      work: "💼 仕事運",
+      money: "💰 金運",
+      love: "❤️ 恋愛運",
+      health: "🫁 健康運",
+    };
 
     out.push(`## ${titles[sec] || sec}`);
     out.push(chosen || "（文章が見つからないよ。data.js の POOLS を確認してね）");
@@ -166,9 +166,6 @@ function buildSectionsText({ toneKey, result, seedBase }) {
   return out.join("\n");
 }
 
-/* =========================
-  出力の組み立て
-========================= */
 function formatDateJP(dobStr) {
   if (!dobStr) return "（未入力）";
   const d = new Date(dobStr);
@@ -190,7 +187,7 @@ function buildOutput({ input, toneKey, result }) {
       safeTrim(input.kana),
       safeTrim(input.dob),
       safeTrim(input.pref),
-      safeTrim(input.birthTime),
+      safeTrim(input.timeValue),
       toneKey,
       result.typeKey,
     ].join("|")
@@ -203,94 +200,102 @@ function buildOutput({ input, toneKey, result }) {
   if (safeTrim(input.kana)) header.push(`ふりがな：${safeTrim(input.kana)}`);
   header.push(`生年月日：${formatDateJP(input.dob)}`);
   header.push(`出生地：${safeTrim(input.pref) || "（未選択）"}`);
-  header.push(`出生時間：${safeTrim(input.birthTime) || "不明"}`);
+  header.push(`出生時間：${safeTrim(input.timeValue) || "不明"}`);
   header.push(`口調：${toneKey === "soft" ? "やさしめ" : toneKey === "standard" ? "標準" : "毒舌"}`);
   header.push("");
 
   header.push(`## 🧸 クマタイプ`);
   header.push(`あなたは **${result.typeKey}** タイプだよ。`);
-  if (result?.meta?.typeOneLine) header.push(`ひとこと：${result.meta.typeOneLine}`);
   header.push("");
 
-  header.push(`## ✅ 今日の3ステップ`);
-  header.push(`1) （あとで data.js から入れる枠）`);
-  header.push(`2) （あとで data.js から入れる枠）`);
-  header.push(`3) （あとで data.js から入れる枠）`);
-  header.push("");
-
+  // 本文
   const body = buildSectionsText({ toneKey, result, seedBase });
+
   return header.join("\n") + body;
 }
 
 /* =========================
-  time UI（不明/入力 + 時 + 00/30）
+  time UI（index.html仕様）
 ========================= */
-function openTimePick(open) {
-  const pick = document.getElementById("timePick");
-  if (!pick) return;
-  pick.classList.toggle("isOpen", !!open);
-  pick.setAttribute("aria-hidden", open ? "false" : "true");
+function setTimePickOpen(isOpen) {
+  const tp = document.getElementById("timePick");
+  if (!tp) return;
+  tp.classList.toggle("isOpen", !!isOpen);
+  tp.setAttribute("aria-hidden", String(!isOpen));
 }
 
-function setMinActive(min) {
+function setMinuteActive(minStr) {
   const b00 = document.getElementById("min00");
   const b30 = document.getElementById("min30");
-  if (b00) b00.classList.toggle("isActive", min === "00");
-  if (b30) b30.classList.toggle("isActive", min === "30");
+  if (b00) b00.classList.toggle("isActive", minStr === "00");
+  if (b30) b30.classList.toggle("isActive", minStr === "30");
 }
 
-function readTimeFromUI() {
+function readTimeValueFromUI() {
+  // hiddenの timeValue を正とする（index.htmlにある）
+  const hidden = document.getElementById("timeValue");
   const modeUnknown = document.getElementById("timeModeUnknown");
   const modeSet = document.getElementById("timeModeSet");
-  const timeValueEl = document.getElementById("timeValue");
-  const hourEl = document.getElementById("timeHour");
+  const hourSel = document.getElementById("timeHour");
 
-  const isSet = modeSet?.checked;
-  if (!isSet) {
-    if (timeValueEl) timeValueEl.value = "不明";
+  const unknownChecked = !!modeUnknown?.checked;
+  const setChecked = !!modeSet?.checked;
+
+  if (unknownChecked || !setChecked) {
+    if (hidden) hidden.value = "不明";
     return "不明";
   }
 
-  const hh = hourEl?.value;
-  const mm = (document.getElementById("min30")?.classList.contains("isActive")) ? "30" : "00";
+  const hh = hourSel?.value;
+  const mm = (hidden?.dataset?.min) || "00";
 
   if (!hh) {
-    if (timeValueEl) timeValueEl.value = "不明";
+    if (hidden) hidden.value = "不明";
     return "不明";
   }
 
-  const t = `${hh}:${mm}`;
-  if (timeValueEl) timeValueEl.value = t;
-  return t;
+  const val = `${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`;
+  if (hidden) hidden.value = val;
+  return val;
 }
 
-function applyTimeToUI(timeStr) {
+function writeTimeValueToUI(timeValue) {
+  const hidden = document.getElementById("timeValue");
   const modeUnknown = document.getElementById("timeModeUnknown");
   const modeSet = document.getElementById("timeModeSet");
-  const hourEl = document.getElementById("timeHour");
-  const timeValueEl = document.getElementById("timeValue");
+  const hourSel = document.getElementById("timeHour");
 
-  const t = safeTrim(timeStr);
-  if (!t || t === "不明") {
+  if (!timeValue || timeValue === "不明") {
     if (modeUnknown) modeUnknown.checked = true;
-    openTimePick(false);
-    if (timeValueEl) timeValueEl.value = "不明";
-    setMinActive("00");
-    if (hourEl) hourEl.value = "";
+    if (modeSet) modeSet.checked = false;
+    setTimePickOpen(false);
+    if (hidden) hidden.value = "不明";
     return;
   }
 
-  // "HH:MM" 前提
-  const [hh, mm] = t.split(":");
+  const m = String(timeValue).match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) {
+    if (hidden) hidden.value = "不明";
+    return;
+  }
+
+  const hh = String(m[1]).padStart(2,"0");
+  const mm = m[2] === "30" ? "30" : "00";
+
+  if (modeUnknown) modeUnknown.checked = false;
   if (modeSet) modeSet.checked = true;
-  openTimePick(true);
-  if (hourEl) hourEl.value = hh || "";
-  setMinActive(mm === "30" ? "30" : "00");
-  if (timeValueEl) timeValueEl.value = t;
+  setTimePickOpen(true);
+
+  if (hourSel) hourSel.value = hh;
+  if (hidden) {
+    hidden.value = `${hh}:${mm}`;
+    hidden.dataset.min = mm;
+  }
+  setMinuteActive(mm);
 }
 
 /* =========================
-  UI入力取得
+  UI 入出力
 ========================= */
 function getInputFromUI() {
   return {
@@ -298,7 +303,7 @@ function getInputFromUI() {
     kana: $("#kana")?.value ?? "",
     dob: $("#dob")?.value ?? "",
     pref: $("#pref")?.value ?? "",
-    birthTime: readTimeFromUI(), // ★ここが重要（#birthTime は使わない）
+    timeValue: readTimeValueFromUI(),
     tone: $("#tone")?.value ?? "standard",
   };
 }
@@ -310,7 +315,7 @@ function applyInputToUI(saved) {
   setValue("dob", saved.dob);
   setValue("pref", saved.pref);
   setValue("tone", saved.tone || "standard");
-  applyTimeToUI(saved.birthTime || "不明");
+  writeTimeValueToUI(saved.timeValue || "不明");
 }
 
 function clearUI() {
@@ -319,45 +324,22 @@ function clearUI() {
   setValue("dob", "");
   setValue("pref", "");
   setValue("tone", "standard");
-  applyTimeToUI("不明");
-
+  writeTimeValueToUI("不明");
   setValue("out", "");
   setText("badgeType", "-");
   setText("badgeAxis", "-");
   setText("badgeLevel", "-");
-  setText("typeName", "-");
-  setText("typeOneLine", "-");
-
-  const img = document.getElementById("typeImg");
-  if (img) {
-    img.removeAttribute("src");
-    img.style.display = "none";
-  }
 }
 
 function updateBadges(result) {
   setText("badgeType", result?.typeKey ?? "-");
   setText("badgeAxis", result?.meta?.axis ?? "-");
   setText("badgeLevel", result?.meta?.level ?? "-");
-
-  // タイプ表示枠（index.html 側にある）
-  setText("typeName", result?.meta?.typeName ?? result?.typeKey ?? "-");
-  setText("typeOneLine", result?.meta?.typeOneLine ?? "-");
-
-  // 画像（あれば）
-  const img = document.getElementById("typeImg");
-  const src = result?.meta?.typeImg;
-  if (img) {
-    if (src) {
-      img.src = src;
-      img.style.display = "block";
-    } else {
-      img.removeAttribute("src");
-      img.style.display = "none";
-    }
-  }
 }
 
+/* =========================
+  ボタン処理
+========================= */
 async function onGenerate() {
   const input = getInputFromUI();
   if (!input.dob) {
@@ -368,7 +350,17 @@ async function onGenerate() {
   saveInputs(input);
 
   const toneKey = normalizeTone(input.tone);
-  const result = await getFortuneResult(input);
+
+  // fortune.js 側は birthTime でも拾えるようにしてある
+  const engineInput = {
+    name: input.name,
+    kana: input.kana,
+    dob: input.dob,
+    pref: input.pref,
+    birthTime: input.timeValue,
+  };
+
+  const result = await getFortuneResult(engineInput);
 
   updateBadges(result);
 
@@ -393,69 +385,72 @@ function onClear() {
 /* =========================
   初期化
 ========================= */
-function initTimeUIBindings() {
+function bindTimeUI() {
   const modeUnknown = document.getElementById("timeModeUnknown");
   const modeSet = document.getElementById("timeModeSet");
+  const hourSel = document.getElementById("timeHour");
+  const b00 = document.getElementById("min00");
+  const b30 = document.getElementById("min30");
+  const hidden = document.getElementById("timeValue");
+
+  // 初期状態
+  setTimePickOpen(!!modeSet?.checked);
 
   modeUnknown?.addEventListener("change", () => {
     if (modeUnknown.checked) {
-      openTimePick(false);
-      readTimeFromUI();
+      setTimePickOpen(false);
+      if (hidden) {
+        hidden.value = "不明";
+        delete hidden.dataset.min;
+      }
       saveInputs(getInputFromUI());
     }
   });
 
   modeSet?.addEventListener("change", () => {
     if (modeSet.checked) {
-      openTimePick(true);
-      readTimeFromUI();
+      setTimePickOpen(true);
+      // 分が未設定なら00
+      if (hidden && !hidden.dataset.min) hidden.dataset.min = "00";
+      setMinuteActive(hidden?.dataset?.min || "00");
+      // hourが空なら先頭を選ばない（ユーザーが選ぶ）
       saveInputs(getInputFromUI());
     }
   });
 
-  document.getElementById("timeHour")?.addEventListener("change", () => {
-    readTimeFromUI();
+  hourSel?.addEventListener("change", () => {
     saveInputs(getInputFromUI());
   });
 
-  document.getElementById("min00")?.addEventListener("click", () => {
-    setMinActive("00");
-    readTimeFromUI();
+  function setMin(minStr) {
+    if (hidden) hidden.dataset.min = minStr;
+    setMinuteActive(minStr);
+    // hidden.valueも更新
+    readTimeValueFromUI();
     saveInputs(getInputFromUI());
-  });
+  }
 
-  document.getElementById("min30")?.addEventListener("click", () => {
-    setMinActive("30");
-    readTimeFromUI();
-    saveInputs(getInputFromUI());
-  });
+  b00?.addEventListener("click", () => setMin("00"));
+  b30?.addEventListener("click", () => setMin("30"));
 }
 
 function init() {
-  // 保存入力を復元
   const saved = loadInputs();
   applyInputToUI(saved);
 
-  // time UI
-  initTimeUIBindings();
-
-  // ボタン
   $("#gen")?.addEventListener("click", onGenerate);
   $("#copy")?.addEventListener("click", onCopy);
   $("#clear")?.addEventListener("click", onClear);
 
-  // 入力が変わったら保存
-  const ids = ["name", "kana", "dob", "pref", "tone"];
+  bindTimeUI();
+
+  // 変更で自動保存
+  const ids = ["name", "kana", "dob", "pref", "tone", "timeHour"];
   for (const id of ids) {
     const el = document.getElementById(id);
     if (!el) continue;
-    el.addEventListener("change", () => {
-      saveInputs(getInputFromUI());
-    });
+    el.addEventListener("change", () => saveInputs(getInputFromUI()));
   }
-
-  // 初期時点で timeValue を同期
-  readTimeFromUI();
 }
 
 document.addEventListener("DOMContentLoaded", init);
