@@ -220,25 +220,8 @@ textarea{
   font-weight: 900;
 }
 
-
-/* iOS Safariでselectが開かない/反応しない対策 */
-select, input {
-  -webkit-appearance: auto; /* 重要：iOSで挙動が安定しやすい */
-  appearance: auto;
+/* iOS/一部ブラウザで要素がタップできなくなる系の最小安全パッチ */
+.card::before, .card::after {
+  pointer-events: none;
 }
 
-/* selectが上に乗るように（透明レイヤーに負けないように） */
-select {
-  position: relative;
-  z-index: 5;
-}
-
-/* 親要素がoverflowで変な当たり判定になるのを防ぐ */
-.card, .wrap, .grid {
-  overflow: visible;
-}
-
-/* iOSでタップが遅延/無視されるのを軽減（効くことがある） */
-select, input, button {
-  touch-action: manipulation;
-}
