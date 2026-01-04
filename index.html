@@ -3,24 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>クマ占いジェネレーター3.1</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <title>クマ占いジェネレーター</title>
+  <link rel="stylesheet" href="./css/style.css" />
 </head>
 
 <body>
-  <main class="wrap">
-    <header class="head">
-      <h1>クマ占い3.1</h1>
-      <p class="sub">ふわふわ見えて、裏ではちゃんとロジックで出してるやつ。</p>
+  <div class="wrap">
+    <header class="header">
+      <div>
+        <h1>クマ占いジェネレーター</h1>
+        <p class="sub">ふわふわ可愛い見た目 × 裏はわりとガチ（出生時間不明OK）</p>
+      </div>
+      <div class="version" id="version"></div>
     </header>
 
-    <section class="grid">
-      <!-- 入力 -->
-      <div class="card">
-        <h2 class="cap">入力</h2>
+    <main class="grid">
+      <!-- 入力カード -->
+      <section class="card">
+        <h2 class="sectionTitle">入力</h2>
 
         <label>名前</label>
-        <input id="name" placeholder="山田 太郎" />
+        <input id="name" placeholder="例：山田 太郎" autocomplete="name" />
 
         <label>生年月日</label>
         <input id="dob" type="date" />
@@ -31,69 +34,63 @@
             <select id="pref"></select>
           </div>
           <div>
-            <label>出生時間（だいたい）</label>
-            <select id="timeblock">
-              <option value="unknown">不明</option>
-              <option value="morning">朝（5〜10時）</option>
-              <option value="day">昼（10〜17時）</option>
-              <option value="evening">夕（17〜21時）</option>
-              <option value="night">夜（21〜2時）</option>
-              <option value="late">深夜（2〜5時）</option>
-            </select>
+            <label>出生時間（不明OK）</label>
+            <select id="time"></select>
           </div>
         </div>
 
-        <label>鑑定スタイル</label>
+        <label>鑑定スタイル（口調）</label>
         <select id="tone">
           <option value="soft">やさしめ</option>
-          <option value="normal">標準</option>
-          <option value="spicy">毒舌</option>
+          <option value="standard" selected>標準</option>
+          <option value="harsh">毒舌</option>
         </select>
 
         <div class="btns">
           <button class="primary" id="gen">出力</button>
-          <button class="ghost" id="copy">コピー</button>
-          <button class="ghost" id="clear">クリア</button>
+          <button id="copy">コピー</button>
+          <button id="clear">クリア</button>
         </div>
 
-        <p class="mini">※入力は端末に保存されるよ（あなたのブラウザ内）。</p>
-      </div>
+        <p class="hint">
+          文章の追加・修正は <code>js/data.js</code> がメイン。<br>
+          見た目は <code>css/style.css</code> を好きに改造してOK。
+        </p>
+      </section>
 
-      <!-- 出力 -->
-      <div class="card">
-        <h2 class="cap">結果</h2>
+      <!-- 出力カード -->
+      <section class="card">
+        <h2 class="sectionTitle">結果</h2>
 
         <div class="badges">
-          <span class="badge" id="bType">タイプ：-</span>
-          <span class="badge" id="bSign">星座：-</span>
-          <span class="badge" id="bLP">数秘：-</span>
+          <span class="pill">タイプ</span><span id="badgeType">-</span>
+          <span class="pill">太陽</span><span id="badgeSun">-</span>
+          <span class="pill">月</span><span id="badgeMoon">-</span>
+          <span class="pill">数秘</span><span id="badgeLP">-</span>
         </div>
 
-        <div class="typeBox" id="typeBox" hidden>
-          <div class="typeName" id="typeName"></div>
-          <div class="typeDesc" id="typeDesc"></div>
-          <!-- イラスト差し替え用（あとで assets/illust に置けばOK） -->
-          <img id="typeImg" class="typeImg" alt="" hidden>
-        </div>
+        <details class="details" id="stepsBox">
+          <summary>今日の3ステップ（タップで開く）</summary>
+          <div class="detailsBody" id="stepsBody"></div>
+        </details>
 
-        <label class="mt">本文</label>
+        <label style="margin-top:10px;">鑑定文</label>
         <textarea id="out" readonly></textarea>
 
-        <details class="steps" id="stepsBox" hidden>
-          <summary>今日の3ステップ（タップで開く）</summary>
-          <ol id="stepsList"></ol>
-        </details>
+        <p class="hint">
+          ※出生時間が不明でも計算できる範囲で精度を上げています。<br>
+          ※「タイプ宣言 → 詳細鑑定」は出力ボタン1回でまとめて出ます。
+        </p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="tiny">
+        画像素材は <code>assets/illust</code> と <code>assets/bg</code> に入れていってね。
       </div>
-    </section>
-
-    <footer class="foot">
-      <small>Version 3.1</small>
     </footer>
-  </main>
+  </div>
 
-  <script src="js/data.js"></script>
-  <script src="js/utils.js"></script>
-  <script src="js/fortune.js"></script>
-  <script src="js/app.js"></script>
+  <script type="module" src="./js/app.js"></script>
 </body>
 </html>
