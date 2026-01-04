@@ -149,13 +149,15 @@ function handleGenerate(){
 
   // 角度（アスペクト用）：今は最低限（Version 2で精密化予定）
   // ※ moon.lon は時間によって変わるので、候補時は lon0 を採用（裏メモ用途）
+    // 角度（アスペクト用）
   const lons = {
     sun: sunLon,
     moon: moon.lon,
-    mercury: 0, // Version 2で角度を埋める
-    venus: 0,
-    mars: 0
+    mercury: mercuryLon(birthUTC),
+    venus: venusLon(birthUTC),
+    mars: marsLon(birthUTC)
   };
+
 
   const result = buildTexts({
     name, place, dobStr, toneKey,
