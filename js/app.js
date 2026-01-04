@@ -1,14 +1,11 @@
 /* =========================================================================
-  Version 10  app.js  (FULL)
-  - UI接続 + 文章選択ロジック（data.jsのPOOLSから選ぶ）
-  - fortune.js は“占い結果を出すだけ”に寄せる想定（ここでは改変しない）
-  - 関数名や戻り値が多少違っても動くように保険を入れてる
-  - 入力値は localStorage に保存して、次回も残る
+  Version 11  app.js  (FULL)
+  - index.html の time UI（不明/入力 + 時 + 00/30）に対応
+  - badgeType / badgeAxis / badgeLevel を更新
+  - fortune.js は window.FortuneEngine.run を呼ぶ想定
+  - data.js は POOLS を後で再構築（無くても落ちない）
 ============================================================================ */
 
-/* =========================
-  0) DOMユーティリティ
-========================= */
 const $ = (sel) => document.querySelector(sel);
 
 function setText(id, text) {
@@ -22,9 +19,9 @@ function setValue(id, val) {
 }
 
 /* =========================
-  1) 入力保存（セッション残す）
+  入力保存（セッション残す）
 ========================= */
-const STORAGE_KEY = "fortune_generator_v10_inputs";
+const STORAGE_KEY = "fortune_generator_v11_inputs";
 
 function loadInputs() {
   try {
@@ -43,11 +40,9 @@ function saveInputs(payload) {
 }
 
 /* =========================
-  2) 文章選択のための “決定的”乱数
-     - 同じ入力なら同じ文章を選ぶ（公開向き）
+  文章選択のための “決定的”乱数
 ========================= */
 function xfnv1a(str) {
-  // 32bit hash
   let h = 2166136261 >>> 0;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);
@@ -76,69 +71,46 @@ function pickDeterministic(arr, seed, salt = "") {
 }
 
 /* =========================
-  3) スコア → high/mid/low
-     - fortune.js が 0-100 or -? を返しても “だいたい”で丸める
+  スコア → high/mid/low
 ========================= */
 function toBand(score) {
-  // score が無い場合は mid
   if (typeof score !== "number" || Number.isNaN(score)) return "mid";
-  // 0〜100想定
   if (score >= 67) return "high";
   if (score >= 34) return "mid";
   return "low";
 }
 
 /* =========================
-  4) toneキーの正規化（UIは やさしめ/標準/毒舌）
+  toneキー正規化
 ========================= */
 function normalizeTone(uiToneValue) {
-  // UI側の value は "soft" | "standard" | "toxic" を想定
-  if (uiToneValue === "soft" || uiToneValue === "standard" || uiToneValue === "toxic") {
-    return uiToneValue;
-  }
-  // もし旧値が来ても救う
-  if (uiToneValue === "clear") return "standard";
-  return "soft";
+  if (uiToneValue === "soft" || uiToneValue === "standard" || uiToneValue === "toxic") return uiToneValue;
+  return "standard";
 }
 
 /* =========================
-  5) fortune.js 呼び出し（関数名が違っても拾う）
-     - 返り値は result オブジェクトに寄せる
+  fortune.js 呼び出し
 ========================= */
 function runFortuneEngine(input) {
-  // fortune.js側がどんなエクスポートでも拾う保険
-  const engine =
-    window.FortuneEngine ||
-    window.fortune ||
-    window.Fortune ||
-    window.fortuneEngine ||
+  const engine = window.FortuneEngine || window.Fortune || null;
+  const fn =
+    engine?.run ||
+    engine?.calc ||
+    engine?.getResult ||
+    engine?.generate ||
+    window.runFortune ||
+    window.calcFortune ||
     null;
 
-  const candidates = [
-    engine?.run,
-    engine?.calc,
-    engine?.getResult,
-    engine?.generate,
-    engine?.makeResult,
-    window.runFortune,
-    window.calcFortune,
-    window.getFortuneResult,
-  ].filter(Boolean);
-
-  if (candidates.length === 0) {
-    // どうしても無ければ、最低限のダミー（表示テスト用）
+  if (!fn) {
     return {
-      typeKey: "kuma01",
+      typeKey: "t01",
       scores: { overall: 50, work: 50, money: 50, love: 50, health: 50 },
-      meta: { note: "fortune.js が見つからないためダミー表示" },
+      meta: { axis: "（不明）", level: "（fortune.js 未接続）" },
     };
   }
 
-  // 1つ目を使う
-  const fn = candidates[0];
   const out = fn(input);
-
-  // promiseでも同期でもOKにする
   return out;
 }
 
@@ -146,56 +118,56 @@ async function getFortuneResult(input) {
   const out = runFortuneEngine(input);
   const result = (out && typeof out.then === "function") ? await out : out;
 
-  // 返り値を正規化
   const normalized = {
-    typeKey: result?.typeKey || result?.kumaType || result?.type || "kuma01",
+    typeKey: result?.typeKey || result?.kumaType || result?.type || "t01",
     scores: result?.scores || result?.score || {},
     meta: result?.meta || result?.details || {},
   };
 
-  // scoresが不足してたら埋める（落ちないため）
   normalized.scores.overall ??= result?.overallScore ?? 50;
   normalized.scores.work ??= result?.workScore ?? 50;
   normalized.scores.money ??= result?.moneyScore ?? 50;
   normalized.scores.love ??= result?.loveScore ?? 50;
   normalized.scores.health ??= result?.healthScore ?? 50;
 
+  normalized.meta.axis ??= "（不明）";
+  normalized.meta.level ??= "標準（出生時間なし）";
+
   return normalized;
 }
 
 /* =========================
-  6) data.js（POOLS）から文章を組み立てる
+  data.js（POOLS）から文章を組み立てる
 ========================= */
 function buildSectionsText({ toneKey, result, seedBase }) {
-  // 期待する sections
   const sections = ["overall", "work", "money", "love", "health"];
-
   const out = [];
+
+  const titles = {
+    overall: "🌍 全体運",
+    work: "💼 仕事運",
+    money: "💰 金運",
+    love: "❤️ 恋愛運",
+    health: "🫁 健康運",
+  };
+
   for (const sec of sections) {
     const score = result.scores?.[sec];
     const band = toBand(score);
 
-    const pool = POOLS?.sections?.[sec]?.[toneKey]?.[band];
+    const pool = window.POOLS?.sections?.[sec]?.[toneKey]?.[band];
     const chosen = pickDeterministic(pool, seedBase, `${sec}:${toneKey}:${band}:${result.typeKey}`);
-
-    // セクション見出し（初心者が後で変えやすい固定）
-    const titles = {
-      overall: "🌍 全体運",
-      work: "💼 仕事運",
-      money: "💰 金運",
-      love: "❤️ 恋愛運",
-      health: "🫁 健康運",
-    };
 
     out.push(`## ${titles[sec] || sec}`);
     out.push(chosen || "（文章が見つからないよ。data.js の POOLS を確認してね）");
-    out.push(""); // 改行
+    out.push("");
   }
+
   return out.join("\n");
 }
 
 /* =========================
-  7) 出力の組み立て（1ボタンで全部出す）
+  出力の組み立て
 ========================= */
 function formatDateJP(dobStr) {
   if (!dobStr) return "（未入力）";
@@ -235,38 +207,99 @@ function buildOutput({ input, toneKey, result }) {
   header.push(`口調：${toneKey === "soft" ? "やさしめ" : toneKey === "standard" ? "標準" : "毒舌"}`);
   header.push("");
 
-  // クマタイプ宣言（イラスト連携しやすい）
   header.push(`## 🧸 クマタイプ`);
   header.push(`あなたは **${result.typeKey}** タイプだよ。`);
+  if (result?.meta?.typeOneLine) header.push(`ひとこと：${result.meta.typeOneLine}`);
   header.push("");
 
-  // 今日の3ステップ（折りたたみで出す前提のテキスト枠）
-  // ※現時点は「枠だけ」。後でfortune.js側の根拠付きステップを入れられる
   header.push(`## ✅ 今日の3ステップ`);
-  header.push(`（アプリ側では折りたたみ表示にしてあるよ）`);
+  header.push(`1) （あとで data.js から入れる枠）`);
+  header.push(`2) （あとで data.js から入れる枠）`);
+  header.push(`3) （あとで data.js から入れる枠）`);
   header.push("");
 
-  // 本文（全体運〜健康運）
   const body = buildSectionsText({ toneKey, result, seedBase });
-
   return header.join("\n") + body;
 }
 
 /* =========================
-  8) UIイベント
+  time UI（不明/入力 + 時 + 00/30）
+========================= */
+function openTimePick(open) {
+  const pick = document.getElementById("timePick");
+  if (!pick) return;
+  pick.classList.toggle("isOpen", !!open);
+  pick.setAttribute("aria-hidden", open ? "false" : "true");
+}
+
+function setMinActive(min) {
+  const b00 = document.getElementById("min00");
+  const b30 = document.getElementById("min30");
+  if (b00) b00.classList.toggle("isActive", min === "00");
+  if (b30) b30.classList.toggle("isActive", min === "30");
+}
+
+function readTimeFromUI() {
+  const modeUnknown = document.getElementById("timeModeUnknown");
+  const modeSet = document.getElementById("timeModeSet");
+  const timeValueEl = document.getElementById("timeValue");
+  const hourEl = document.getElementById("timeHour");
+
+  const isSet = modeSet?.checked;
+  if (!isSet) {
+    if (timeValueEl) timeValueEl.value = "不明";
+    return "不明";
+  }
+
+  const hh = hourEl?.value;
+  const mm = (document.getElementById("min30")?.classList.contains("isActive")) ? "30" : "00";
+
+  if (!hh) {
+    if (timeValueEl) timeValueEl.value = "不明";
+    return "不明";
+  }
+
+  const t = `${hh}:${mm}`;
+  if (timeValueEl) timeValueEl.value = t;
+  return t;
+}
+
+function applyTimeToUI(timeStr) {
+  const modeUnknown = document.getElementById("timeModeUnknown");
+  const modeSet = document.getElementById("timeModeSet");
+  const hourEl = document.getElementById("timeHour");
+  const timeValueEl = document.getElementById("timeValue");
+
+  const t = safeTrim(timeStr);
+  if (!t || t === "不明") {
+    if (modeUnknown) modeUnknown.checked = true;
+    openTimePick(false);
+    if (timeValueEl) timeValueEl.value = "不明";
+    setMinActive("00");
+    if (hourEl) hourEl.value = "";
+    return;
+  }
+
+  // "HH:MM" 前提
+  const [hh, mm] = t.split(":");
+  if (modeSet) modeSet.checked = true;
+  openTimePick(true);
+  if (hourEl) hourEl.value = hh || "";
+  setMinActive(mm === "30" ? "30" : "00");
+  if (timeValueEl) timeValueEl.value = t;
+}
+
+/* =========================
+  UI入力取得
 ========================= */
 function getInputFromUI() {
   return {
     name: $("#name")?.value ?? "",
-    // ふりがな欄（将来用：無くてもOK。UIに無ければ空）
     kana: $("#kana")?.value ?? "",
     dob: $("#dob")?.value ?? "",
-    // 都道府県プルダウン
     pref: $("#pref")?.value ?? "",
-    // 時刻のUI（プルダウン or 入力）
-    birthTime: $("#birthTime")?.value ?? "",
-    // 口調
-    tone: $("#tone")?.value ?? "soft",
+    birthTime: readTimeFromUI(), // ★ここが重要（#birthTime は使わない）
+    tone: $("#tone")?.value ?? "standard",
   };
 }
 
@@ -276,8 +309,8 @@ function applyInputToUI(saved) {
   setValue("kana", saved.kana);
   setValue("dob", saved.dob);
   setValue("pref", saved.pref);
-  setValue("birthTime", saved.birthTime);
-  setValue("tone", saved.tone || "soft");
+  setValue("tone", saved.tone || "standard");
+  applyTimeToUI(saved.birthTime || "不明");
 }
 
 function clearUI() {
@@ -285,19 +318,44 @@ function clearUI() {
   setValue("kana", "");
   setValue("dob", "");
   setValue("pref", "");
-  setValue("birthTime", "");
-  setValue("tone", "soft");
+  setValue("tone", "standard");
+  applyTimeToUI("不明");
+
   setValue("out", "");
   setText("badgeType", "-");
-  setText("badgeBand", "-");
+  setText("badgeAxis", "-");
+  setText("badgeLevel", "-");
+  setText("typeName", "-");
+  setText("typeOneLine", "-");
+
+  const img = document.getElementById("typeImg");
+  if (img) {
+    img.removeAttribute("src");
+    img.style.display = "none";
+  }
 }
 
 function updateBadges(result) {
-  // バッジ（UIに要素がある場合のみ）
   setText("badgeType", result?.typeKey ?? "-");
-  // overallだけ代表で band を出す
-  const b = toBand(result?.scores?.overall);
-  setText("badgeBand", b ?? "-");
+  setText("badgeAxis", result?.meta?.axis ?? "-");
+  setText("badgeLevel", result?.meta?.level ?? "-");
+
+  // タイプ表示枠（index.html 側にある）
+  setText("typeName", result?.meta?.typeName ?? result?.typeKey ?? "-");
+  setText("typeOneLine", result?.meta?.typeOneLine ?? "-");
+
+  // 画像（あれば）
+  const img = document.getElementById("typeImg");
+  const src = result?.meta?.typeImg;
+  if (img) {
+    if (src) {
+      img.src = src;
+      img.style.display = "block";
+    } else {
+      img.removeAttribute("src");
+      img.style.display = "none";
+    }
+  }
 }
 
 async function onGenerate() {
@@ -307,7 +365,6 @@ async function onGenerate() {
     return;
   }
 
-  // 入力保存
   saveInputs(input);
 
   const toneKey = normalizeTone(input.tone);
@@ -318,18 +375,6 @@ async function onGenerate() {
   const text = buildOutput({ input, toneKey, result });
   const out = $("#out");
   if (out) out.value = text;
-
-  // 「今日の3ステップ」を折りたたみに出す（UIがあれば）
-  // ここは今はダミー。後で result.meta.steps とかに差し替えできる
-  const stepsEl = $("#steps");
-  if (stepsEl) {
-    const steps = result?.meta?.steps;
-    if (Array.isArray(steps) && steps.length) {
-      stepsEl.innerHTML = steps.map((s) => `<li>${s}</li>`).join("");
-    } else {
-      stepsEl.innerHTML = `<li>今日は「ひとつ整える」だけで勝ちだよ。</li><li>連絡は短くでOK。止めないのが強いよ。</li><li>最後に深呼吸して、早めに寝ようね。</li>`;
-    }
-  }
 }
 
 async function onCopy() {
@@ -346,28 +391,71 @@ function onClear() {
 }
 
 /* =========================
-  9) 初期化
+  初期化
 ========================= */
+function initTimeUIBindings() {
+  const modeUnknown = document.getElementById("timeModeUnknown");
+  const modeSet = document.getElementById("timeModeSet");
+
+  modeUnknown?.addEventListener("change", () => {
+    if (modeUnknown.checked) {
+      openTimePick(false);
+      readTimeFromUI();
+      saveInputs(getInputFromUI());
+    }
+  });
+
+  modeSet?.addEventListener("change", () => {
+    if (modeSet.checked) {
+      openTimePick(true);
+      readTimeFromUI();
+      saveInputs(getInputFromUI());
+    }
+  });
+
+  document.getElementById("timeHour")?.addEventListener("change", () => {
+    readTimeFromUI();
+    saveInputs(getInputFromUI());
+  });
+
+  document.getElementById("min00")?.addEventListener("click", () => {
+    setMinActive("00");
+    readTimeFromUI();
+    saveInputs(getInputFromUI());
+  });
+
+  document.getElementById("min30")?.addEventListener("click", () => {
+    setMinActive("30");
+    readTimeFromUI();
+    saveInputs(getInputFromUI());
+  });
+}
+
 function init() {
   // 保存入力を復元
   const saved = loadInputs();
   applyInputToUI(saved);
 
-  // ボタン紐付け
+  // time UI
+  initTimeUIBindings();
+
+  // ボタン
   $("#gen")?.addEventListener("click", onGenerate);
   $("#copy")?.addEventListener("click", onCopy);
   $("#clear")?.addEventListener("click", onClear);
 
-  // 入力が変わったら自動保存（任意：初心者に優しい）
-  const ids = ["name", "kana", "dob", "pref", "birthTime", "tone"];
+  // 入力が変わったら保存
+  const ids = ["name", "kana", "dob", "pref", "tone"];
   for (const id of ids) {
     const el = document.getElementById(id);
     if (!el) continue;
     el.addEventListener("change", () => {
-      const input = getInputFromUI();
-      saveInputs(input);
+      saveInputs(getInputFromUI());
     });
   }
+
+  // 初期時点で timeValue を同期
+  readTimeFromUI();
 }
 
 document.addEventListener("DOMContentLoaded", init);
