@@ -10,15 +10,13 @@
 <body>
   <div class="wrap">
     <header class="header">
-      <div>
-        <h1>クマ占いジェネレーター</h1>
-        <p class="sub">ふわふわ可愛い見た目 × 裏はわりとガチ（出生時間不明OK）</p>
-      </div>
-      <div class="version" id="version"></div>
+      <h1>クマ占いジェネレーター</h1>
+      <p class="sub">ふわふわ見た目 × 裏はガチ寄り（出生時間なしでも成立）</p>
+      <p class="ver">Version 1</p>
     </header>
 
     <main class="grid">
-      <!-- 入力カード -->
+      <!-- 入力 -->
       <section class="card">
         <h2 class="sectionTitle">入力</h2>
 
@@ -34,16 +32,16 @@
             <select id="pref"></select>
           </div>
           <div>
-            <label>出生時間（不明OK）</label>
+            <label>出生時間（任意）</label>
             <select id="time"></select>
           </div>
         </div>
 
-        <label>鑑定スタイル（口調）</label>
+        <label>鑑定スタイル（文章の雰囲気）</label>
         <select id="tone">
           <option value="soft">やさしめ</option>
           <option value="standard" selected>標準</option>
-          <option value="harsh">毒舌</option>
+          <option value="toxic">毒舌</option>
         </select>
 
         <div class="btns">
@@ -53,42 +51,39 @@
         </div>
 
         <p class="hint">
-          文章の追加・修正は <code>js/data.js</code> がメイン。<br>
-          見た目は <code>css/style.css</code> を好きに改造してOK。
+          見た目：<b>css/style.css の :root</b> を触るだけで一気に変わるよ。<br>
+          文章：<b>js/data.js</b> に集約。ロジック：<b>js/fortune.js</b>。
         </p>
       </section>
 
-      <!-- 出力カード -->
+      <!-- 出力 -->
       <section class="card">
-        <h2 class="sectionTitle">結果</h2>
+        <h2 class="sectionTitle">出力</h2>
 
         <div class="badges">
           <span class="pill">タイプ</span><span id="badgeType">-</span>
-          <span class="pill">太陽</span><span id="badgeSun">-</span>
-          <span class="pill">月</span><span id="badgeMoon">-</span>
-          <span class="pill">数秘</span><span id="badgeLP">-</span>
+          <span class="pill">相性軸</span><span id="badgeAxis">-</span>
+          <span class="pill">精度</span><span id="badgeLevel">-</span>
         </div>
 
-        <details class="details" id="stepsBox">
-          <summary>今日の3ステップ（タップで開く）</summary>
-          <div class="detailsBody" id="stepsBody"></div>
-        </details>
+        <div class="typeBox">
+          <div class="typeImgWrap">
+            <img id="typeImg" alt="type illust" />
+          </div>
+          <div class="typeText">
+            <div class="typeName" id="typeName">-</div>
+            <div class="typeOneLine" id="typeOneLine">-</div>
+          </div>
+        </div>
 
-        <label style="margin-top:10px;">鑑定文</label>
+        <label style="margin-top: 12px;">結果テキスト</label>
         <textarea id="out" readonly></textarea>
 
         <p class="hint">
-          ※出生時間が不明でも計算できる範囲で精度を上げています。<br>
-          ※「タイプ宣言 → 詳細鑑定」は出力ボタン1回でまとめて出ます。
+          ※「出生時間」は今は任意（未入力でも成立）。後で上位モードとして拡張できる設計。
         </p>
       </section>
     </main>
-
-    <footer class="footer">
-      <div class="tiny">
-        画像素材は <code>assets/illust</code> と <code>assets/bg</code> に入れていってね。
-      </div>
-    </footer>
   </div>
 
   <script type="module" src="./js/app.js"></script>
