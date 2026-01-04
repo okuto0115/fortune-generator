@@ -1,20 +1,14 @@
 /*
-  fortune.js / Version 1.3
+  fortune.js / Version 1.4
   ------------------------------------------------------------
-  ✅ 公開向け：専門用語ゼロ（完全に翻訳）
-  ✅ 口調：女の子の話し言葉
-     - soft：ふわふわ天使（包み込む/やさしい/語尾「〜だよ」「〜だよね〜」）
-     - normal：友達に話す感じ
-     - spicy：毒舌な女の子（「やれ」禁止 → 「やって」「〜しな？」）
-  ✅ 今日のひとこと：ランダムではなく根拠で決める（今日の空気 × あなたのタイプ）
-  ✅ 裏メモ：専門用語あり（折りたたみ用）
+  ✅ 口調：spicy（毒舌）を強化（女の子が刺す感じ）
+     - 命令口調「やれ」は避ける → 「やって」「〜しな？」「逃げないで？」
+     - ただし差別・脅し・下品は入れない（刺すけど品は保つ）
+  ✅ 今日のひとこと：根拠で決定（今日の月×あなたのタイプ）
 */
 
 import { aspectBetween } from "./astro.js";
 
-/* =========
-  初心者向け：ここが文章DB（基本ここだけ触ればOK）
-========= */
 export const TEXT_DB = {
   tone: {
     soft: {
@@ -26,12 +20,11 @@ export const TEXT_DB = {
       closer: "運ってね、選び方と続け方でちゃんと変わる。だから大丈夫。",
     },
     spicy: {
-      header: "はい見た。甘やかさないよ？伸びたいなら、ちゃんと現実見よ〜。",
-      closer: "刺さった？なら正解。そこ直したら、あなたもっと強くなるよ。",
+      header: "はい、見たよ。で、どうするの？このまま“やりたい気持ちだけ”で終わる？",
+      closer: "ふふ、刺さった？でもね、刺さるってことは伸びしろがあるってことだよ。",
     }
   },
 
-  /* 表向けラベル（専門用語は出さない） */
   faceLabel: {
     "牡羊座":"まっすぐ突撃タイプ","牡牛座":"じっくり安定タイプ","双子座":"軽やか切り替えタイプ","蟹座":"守って育てるタイプ",
     "獅子座":"堂々センタータイプ","乙女座":"整えて強くなるタイプ","天秤座":"バランス美意識タイプ","蠍座":"深く刺さるタイプ",
@@ -46,7 +39,6 @@ export const TEXT_DB = {
     1:"はじめる力",2:"合わせる力",3:"広げる力",4:"積む力",5:"変える力",6:"守る力",7:"読み解く力",8:"勝ち切る力",9:"まとめる力"
   },
 
-  /* 20タイプ（かわいい） */
   types20: {
     "FIRE_1":  { name:"ほかほか見守りグマ", desc:"安心できる土台ができた瞬間、あなたの運は一気に伸びるよ。", tags:"火×安定" },
     "FIRE_2":  { name:"メラメラ練習グマ",   desc:"反復が才能。地味に見えて、いちばん強い育ち方だよ。", tags:"火×成長" },
@@ -74,9 +66,6 @@ export const TEXT_DB = {
   },
 };
 
-/* =========
-  数秘（1〜9）
-========= */
 export function lifePath(dobStr){
   const s = dobStr.replaceAll("-", "");
   let sum = 0;
@@ -85,9 +74,6 @@ export function lifePath(dobStr){
   return sum || 9;
 }
 
-/* =========
-  内部ロジック（表には出さない）
-========= */
 export function signElement(sign){
   const fire  = ["牡羊座","獅子座","射手座"];
   const earth = ["牡牛座","乙女座","山羊座"];
@@ -108,238 +94,86 @@ export function typeKeyFrom(sunSign, lp){
   return `${signElement(sunSign)}_${lpBucket(lp)}`;
 }
 
-/* =========
-  今日のひとこと（ランダムではなく根拠で決める）
-  ・今日の月（空気）と、あなたのタイプ（typeKeyのエレメント/段階）で分岐
-  ・候補から1つ選ぶときは、毎日同じ入力なら同じ結果になる（疑似ハッシュ）
-========= */
+/* --- 今日のひとこと（根拠で決める） --- */
 function hash01(str){
-  // 0〜1の疑似乱数（同じ文字列なら同じ結果）
   let h = 2166136261;
   for (let i=0; i<str.length; i++){
     h ^= str.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
-  // 0..1
   return ((h >>> 0) % 10000) / 10000;
 }
-
-function todayKeyFrom(ctx){
-  // 今日の“空気”は todaySigns.moon を主軸にする（体感に直結しやすい）
-  const todayMood = signElement(ctx.todaySigns.moon);
-  const yourBase  = ctx.typeKey.split("_")[0];  // FIRE/EARTH/AIR/WATER
-  const yourStep  = ctx.typeKey.split("_")[1];  // 1..5
-  return `${todayMood}_${yourBase}_${yourStep}`;
-}
-
-function todayLinePool(toneKey, key){
-  // toneKeyごとに同じ根拠でも言い方を変える（ここが“ガチ感×読みやすさ”）
-  // 専門用語ゼロ。言い換えだけ。
-  const soft = {
-    "FIRE_FIRE": [
-      "今日はね、勢いが味方だよ。小さくでいいから、最初の一歩だけ踏み出してみよ？",
-      "やる気が出たら勝ち…じゃなくて、動いたらやる気がついてくる日だよ〜。",
-      "迷うなら、いちばん小さいやつから始めてみて。すぐ波に乗れるよ。"
-    ],
-    "FIRE_EARTH": [
-      "今日は勢いより土台だよ。机の上とか予定をちょっと整えるだけで、心が軽くなるよ〜。",
-      "焦らなくていいの。ひとつ整えたら、自然に次も動きやすくなる日だよ。",
-      "まずは“やることを減らす”のが正解。減らせたら、勝ちだよ。"
-    ],
-    "FIRE_AIR": [
-      "今日はね、言葉にすると進む日だよ。メモに一行書くだけでも変わるよ〜。",
-      "誰かに一言送るだけで流れが動きやすいよ。軽くでいいからね。",
-      "頭の中を外に出す日。書いて、見て、整えていこ？"
-    ],
-    "FIRE_WATER": [
-      "今日は気持ちの火加減が大事だよ。いったん落ち着くと、ちゃんと強くなれるよ〜。",
-      "無理に元気出さなくていい。安心できることから始めたら、うまくいく日だよ。",
-      "心がほっとする選択をしてね。そこから運が育つよ。"
-    ],
-
-    "EARTH_FIRE": [
-      "今日はね、やるなら一気に進む日だよ。小さく決めて、えいっとやってみよ？",
-      "整えた上で動くと強い日。準備→実行の順がいちばん気持ちいいよ〜。",
-      "迷ったら“今すぐできる方”。それが正解になりやすいよ。"
-    ],
-    "EARTH_EARTH": [
-      "今日は“整えるだけで勝ち”の日だよ。片づけとか、予定の整理とかね〜。",
-      "小さな積み上げが、ちゃんと未来につながる日。えらいよ、ほんとに。",
-      "一個だけ整えてみて。そこから不思議と回り出すよ。"
-    ],
-    "EARTH_AIR": [
-      "今日はね、整理して言語化すると進むよ。やることを3つに絞ってみよ？",
-      "連絡は短くてOK。溜めないだけで運が軽くなる日だよ〜。",
-      "頭の中を棚おろしして、スッキリさせよ？"
-    ],
-    "EARTH_WATER": [
-      "今日は安心できる場所が大事だよ。落ち着く空間で作業すると進みやすいよ〜。",
-      "気持ちが整うと、作業も整う日。まずは深呼吸ね。",
-      "やさしく自分を扱ってあげて。そこがいちばんの開運だよ。"
-    ],
-
-    "AIR_FIRE": [
-      "今日はね、ひらめきが強いよ。思いついたらメモして、すぐ小さく試してみよ？",
-      "勢いに乗れる日。言い訳は置いといて、まず一回だけ動いてみて〜。",
-      "新しいことにちょい触れするだけで、運がパッと明るくなるよ。"
-    ],
-    "AIR_EARTH": [
-      "今日はアイデアを形にすると強いよ。最初の形は雑でいいんだよ〜。",
-      "考えるだけより、まず出して、あとで整えよ？それが勝ちやすい日。",
-      "一個だけ“形”にしてみて。そこから現実がついてくるよ。"
-    ],
-    "AIR_AIR": [
-      "今日は言葉の魔法が効く日だよ。書く・話す・送る、が開運だよ〜。",
-      "誰かとの会話でヒントが出やすい日。軽く話してみよ？",
-      "情報を回すほど運が動く日。抱え込まないでね。"
-    ],
-    "AIR_WATER": [
-      "今日はね、気持ちの整理が先だよ。心が落ち着くと、自然に進むよ〜。",
-      "優しい言葉を自分にかけてあげて。そこから強くなれる日。",
-      "無理に明るくしなくていい。落ち着いた選択が正解になりやすいよ。"
-    ],
-
-    "WATER_FIRE": [
-      "今日は気持ちが動きやすい日だよ。だからこそ、ひとつだけ決めてみよ？",
-      "迷いが出ても大丈夫。小さく決めたら、ちゃんと進む日だよ〜。",
-      "勢いを借りて、短時間だけ集中してみて。意外といけるよ。"
-    ],
-    "WATER_EARTH": [
-      "今日はね、安心が開運だよ。整える・休む・あたためる、これが正解〜。",
-      "丁寧にやるほど勝てる日。急がなくていいよ。",
-      "生活の土台をちょっと整えたら、運が守ってくれる日だよ。"
-    ],
-    "WATER_AIR": [
-      "今日は話すと楽になる日だよ。言葉にしたら、心がほどけるよ〜。",
-      "連絡は短くてOK。やさしい一言が運を動かす日。",
-      "気持ちは外に出してね。抱えないで。"
-    ],
-    "WATER_WATER": [
-      "今日はね、癒しがいちばんの開運だよ。休んでいい日だよ〜。",
-      "感情が揺れたら、無理に正解探さなくていいの。落ち着けば大丈夫。",
-      "自分にやさしくしてあげて。そこが今日の勝ちポイントだよ。"
-    ],
-  };
-
-  const normal = {
-    // normalは softの言い回しを少しだけシャキッとさせた版
-  };
-
-  const spicy = {
-    // “女の子の毒舌”に寄せる（命令口調は避ける）
-    "FIRE_FIRE": [
-      "今日は勢いが強い日。迷ってる時間もったいないよ？小さくでいいから、さっさと始めて。",
-      "やる気待ちはやめよ。手を動かした分だけ前に進む日なんだから、動いて。",
-      "決めて、やって。あとで整えればいいから。"
-    ],
-    "FIRE_EARTH": [
-      "今日は土台の日。散らかってるのに進まないとか、そりゃ無理だよ？先に整えて。",
-      "やること増やす前に減らして。できない理由探す前に、削って。",
-      "まず一個だけ片づけて。それだけで流れ変わるから。"
-    ],
-    "FIRE_AIR": [
-      "今日は言葉が効く日。頭の中でぐるぐるしてないで、書いて。送って。話して。",
-      "連絡後回しにしてるなら、今しよ？溜めるほどしんどいだけ。",
-      "メモ一行でいい。出して。"
-    ],
-    "FIRE_WATER": [
-      "今日は気持ちが揺れやすい日。だからって不安に飲まれないで。落ち着く方選んで。",
-      "無理に元気出さなくていいけど、守るところは守って。睡眠とかね。",
-      "安心できることから始めて。じゃないと全部ぶれるよ。"
-    ],
-
-    "EARTH_FIRE": [
-      "今日は動いた人が勝つ日。準備ばっかしてないで、ひとつやって。",
-      "完璧に整ってから…とか遅い。今できる形で出して。",
-      "迷うなら“今すぐできる方”。はい、そっち。"
-    ],
-    "EARTH_EARTH": [
-      "今日は整えるだけで勝てる日。片づけて。予定見直して。終わり。簡単。",
-      "積み上げの日なんだから、サボると後で自分が困るよ？少しだけでもやって。",
-      "一個整えて。欲張らないでいいから。"
-    ],
-    "EARTH_AIR": [
-      "今日は整理と言語化。やること増やしてパンクしてるなら、まず絞って。",
-      "連絡溜めてる？それ運落ちるやつ。短くでいいから返して。",
-      "頭の中を外に出して。抱え込まないで。"
-    ],
-    "EARTH_WATER": [
-      "今日は安心が最優先。無理して崩すの、いちばんダメ。落ち着いて。",
-      "回復しないと進まないタイプの日。だから、ちゃんと休んで。",
-      "深呼吸して。ほんとに。"
-    ],
-
-    "AIR_FIRE": [
-      "今日はひらめき強い。思いついたら放置しないで、試して。もったいない。",
-      "勢いあるのに止まってるの、意味わかんないよ？小さく動いて。",
-      "新しいこと、ちょい触れして。"
-    ],
-    "AIR_EARTH": [
-      "今日は形にして勝つ日。考えてるだけで満足しないで？出して。",
-      "雑でもいいから一回作って。それを整えていけばいいんだから。",
-      "一個だけ“形”にして。逃げないで。"
-    ],
-    "AIR_AIR": [
-      "今日は言葉の日。黙って悩むより、話して。書いて。答え出るから。",
-      "会話がヒントになる日。閉じこもるの、損だよ？",
-      "情報回して。抱えない。"
-    ],
-    "AIR_WATER": [
-      "今日は気持ち整理が先。強がっても進まないよ？落ち着いて。",
-      "優しい言葉を自分にかけて。雑に扱うと、全部ぐちゃぐちゃになるから。",
-      "無理に明るくしなくていい。静かに整えて。"
-    ],
-
-    "WATER_FIRE": [
-      "今日は感情が動きやすい。だからこそ、ひとつだけ決めて。流されないで。",
-      "迷ってもいいけど、止まらないで。短時間だけ集中してみて。",
-      "小さく決めて。動いて。"
-    ],
-    "WATER_EARTH": [
-      "今日は安心の積み上げ。睡眠、食事、片づけ。そこサボると全部落ちるよ？",
-      "丁寧にやるほど勝てる日。焦って雑にしないで。",
-      "土台整えて。ほんとそれだけ。"
-    ],
-    "WATER_AIR": [
-      "今日は話すと楽になる日。溜めないで言って。抱えるのやめて。",
-      "連絡は短くてOK。やさしい一言が運を動かすから。",
-      "気持ち外に出して。"
-    ],
-    "WATER_WATER": [
-      "今日は癒し最優先。頑張る日じゃない。休んで。",
-      "感情が揺れても、正解探しで追い詰めないで。落ち着けば戻るから。",
-      "自分にやさしくして。雑に扱ったら、運も雑になるよ？"
-    ],
-  };
-
-  // key例：FIRE_EARTH_3 → テーブルは先頭2つだけ見ればOK
-  const [todayMood, yourBase] = key.split("_");
-  const k2 = `${todayMood}_${yourBase}`;
-
-  if (toneKey === "soft") return soft[k2] ?? soft["EARTH_EARTH"];
-  if (toneKey === "spicy") return spicy[k2] ?? spicy["EARTH_EARTH"];
-  // normalは softの文章を少しだけ短くして使う（未定義ならsoft流用）
-  return (normal[k2] ?? soft[k2] ?? soft["EARTH_EARTH"]).map(s => s.replaceAll("〜", "").replaceAll("だよ〜", "だよ"));
-}
-
 function pickDeterministic(list, seedStr){
   const x = hash01(seedStr);
   const idx = Math.floor(x * list.length);
   return list[Math.min(idx, list.length-1)];
 }
+function todayKeyFrom(ctx){
+  const todayMood = signElement(ctx.todaySigns.moon);
+  const yourBase  = ctx.typeKey.split("_")[0];
+  const yourStep  = ctx.typeKey.split("_")[1];
+  return `${todayMood}_${yourBase}_${yourStep}`;
+}
+
+function todayLinePool(toneKey, key){
+  const [todayMood, yourBase] = key.split("_");
+  const k2 = `${todayMood}_${yourBase}`;
+
+  const soft = {
+    "FIRE_FIRE": [
+      "今日はね、勢いが味方だよ。小さくでいいから、最初の一歩だけ踏み出してみよ？",
+      "やる気はね、動いたらついてくる日だよ〜。だから一回だけ始めてみて。",
+      "迷うなら、いちばん小さいやつからでいいよ。ちゃんと波に乗れるよ。"
+    ],
+    "EARTH_EARTH": [
+      "今日は“整えるだけで勝ち”の日だよ。ひとつ整えたら心がふわっと軽くなるよ〜。",
+      "小さな積み上げが、そのまま未来になる日だよ。えらいよ、ほんとに。",
+      "一個だけ整えてみて。そこから回り出すよ。"
+    ],
+  };
+
+  // spicy：もっと刺す（でも命令口調「やれ」は避ける）
+  const spicy = {
+    "FIRE_FIRE": [
+      "今日は勢いの日。迷ってる時間、もったいなさすぎるよ？小さくでいいから始めて。",
+      "やる気待ちしてるなら、その時点で負けてるよ。動いて、ちゃんと。",
+      "決めて、やって。あとで整えればいいの。"
+    ],
+    "FIRE_EARTH": [
+      "進まない理由、だいたい散らかってるだけだよ？先に整えて。言い訳いらない。",
+      "やること増やしてパンク？それ、賢くないよ。減らしてから動いて。",
+      "一個だけ片づけて。欲張らないで、まずそれ。"
+    ],
+    "EARTH_EARTH": [
+      "今日は積み上げの日。ここでサボったら、あとで自分が泣くよ？だから少しだけでもやって。",
+      "“いつかやる”って言ってるうちは何も変わらないよ。今日ちょっと進めて。",
+      "整えるだけで勝てる日なのに、やらないのは…普通にもったいないよ？"
+    ],
+    "AIR_AIR": [
+      "頭の中で悩んでる時間、コスパ悪いよ？書いて。話して。出して。",
+      "連絡後回しにしてるなら、今のうちに短く返して。溜めるほどダルくなるだけ。",
+      "言語化して。ぼんやりのままにしないで。"
+    ],
+    "WATER_WATER": [
+      "今日は頑張る日じゃない。無理して崩すの、いちばんダサいよ？休んで。",
+      "感情で自分を雑に扱わないで。そこから全部乱れるんだから。",
+      "回復しないと進まない日。だから、ちゃんと戻して。"
+    ],
+  };
+
+  if (toneKey === "soft") return soft[k2] ?? soft["EARTH_EARTH"];
+  if (toneKey === "spicy") return spicy[k2] ?? spicy["EARTH_EARTH"];
+  return (soft[k2] ?? soft["EARTH_EARTH"]).map(s => s.replaceAll("〜", ""));
+}
 
 function makeTodayOneLine(ctx){
   const key = todayKeyFrom(ctx);
   const pool = todayLinePool(ctx.toneKey, key);
-
-  // 毎日同じ入力なら同じ結果： dob + todayStr + typeKey + tone
   const seed = `${ctx.dobStr}|${ctx.todayStr}|${ctx.typeKey}|${ctx.toneKey}`;
   return pickDeterministic(pool, seed);
 }
 
-/* =========
-  公開文章（専門用語ゼロ・会話調）
-========= */
+/* --- 公開文章 --- */
 function makePublicText(ctx){
   const tonePack = TEXT_DB.tone[ctx.toneKey] ?? TEXT_DB.tone.normal;
   const type = TEXT_DB.types20[ctx.typeKey];
@@ -360,39 +194,24 @@ function makePublicText(ctx){
   lines.push("");
 
   lines.push(`## 今日のひとこと`);
-  lines.push(`${todayOne}`);
-  lines.push("");
-
-  lines.push(`## まずは安心してね`);
-  if (ctx.toneKey === "soft"){
-    lines.push(`今日のあなた、ちゃんと進める日だよ。だからね、怖がらなくていいの。`);
-    lines.push(`できることを、できる分だけでいいよ〜。それでも運は動くからね。`);
-  } else if (ctx.toneKey === "spicy"){
-    lines.push(`今日のあなた、ちゃんと進める。なのに止まるのは、ただのもったいないだよ？`);
-    lines.push(`できる分でいいけど、“やる”はやって。そこは甘えないで。`);
-  } else {
-    lines.push(`今日はちゃんと進める日。やることを絞って動けばOK。`);
-  }
+  lines.push(todayOne);
   lines.push("");
 
   lines.push(`## ${name}の雰囲気`);
-  lines.push(`外で見せる顔は「${face}」だよ。だから周りからはそう見られやすい。`);
+  lines.push(`外で見せる顔は「${face}」だよ。周りからはそう見られやすいの。`);
   lines.push(`でも本音のクセは「${core}」。ここ分かってると、無駄に疲れにくいよ。`);
   lines.push(`それと、誕生日の数字は「${ctx.lp}（${numLabel}）」。あなたの伸び方のクセ、みたいなものだよ。`);
-  if (ctx.timeLabel === "不明"){
-    lines.push(`出生時間は不明でも大丈夫だよ。必要なところは“候補”で丁寧に出してるからね。`);
-  } else {
-    lines.push(`出生時間は「${ctx.timeLabel}」で見てるよ。`);
-  }
+  lines.push(ctx.timeLabel === "不明"
+    ? `出生時間は不明でも大丈夫だよ。必要なところは“候補”で丁寧に出してるからね。`
+    : `出生時間は「${ctx.timeLabel}」で見てるよ。`
+  );
   lines.push("");
 
   lines.push(`## 仕事`);
   if (ctx.toneKey === "soft"){
-    lines.push(`仕事はね、頑張り方を間違えなければちゃんと伸びるよ。`);
-    lines.push(`今日は「小さく出して、あとで整える」が向いてる日だよ〜。`);
+    lines.push(`今日は「小さく出して、あとで整える」が向いてる日だよ〜。できる形で出してみよ？`);
   } else if (ctx.toneKey === "spicy"){
-    lines.push(`仕事ね。完璧にしてから…ってやってると遅いよ？`);
-    lines.push(`今日は「小さく出して、回しながら整える」ってやって。`);
+    lines.push(`完璧にしてから動くの、遅いよ？今日は“小さく出して回す”でやって。逃げないでね。`);
   } else {
     lines.push(`仕事は「小さく出して回す」が強い日。テンプレ化も効く。`);
   }
@@ -400,11 +219,9 @@ function makePublicText(ctx){
 
   lines.push(`## お金`);
   if (ctx.toneKey === "soft"){
-    lines.push(`お金って不安になりやすいよね。でもね、仕組みにすると落ち着くよ。`);
-    lines.push(`今日は“ルールを1個だけ”作ると安心が増える日だよ〜。`);
+    lines.push(`今日は“ルールを1個だけ”作ると安心が増える日だよ。小さくでいいからね〜。`);
   } else if (ctx.toneKey === "spicy"){
-    lines.push(`お金は感情で触ると負けるの。だから、数字を見て。逃げないで。`);
-    lines.push(`今日は固定費かルールを1個だけ整えて。未来の自分が楽になるから。`);
+    lines.push(`数字から目そらしてるなら、そろそろやめよ？固定費かルール、1個だけ整えて。ちゃんと。`);
   } else {
     lines.push(`お金はルール化が最強。今日は1つ仕組みを整えると安定する。`);
   }
@@ -412,11 +229,9 @@ function makePublicText(ctx){
 
   lines.push(`## 恋愛`);
   if (ctx.toneKey === "soft"){
-    lines.push(`恋愛はね、焦らなくていいよ。合う人ほど会話が自然に楽しいからね〜。`);
-    lines.push(`今日は“安心できるペース”を大事にしてみて。`);
+    lines.push(`焦らなくていいよ。合う人ほど会話が自然に楽しいからね〜。安心できるペースでいこ？`);
   } else if (ctx.toneKey === "spicy"){
-    lines.push(`恋愛。雑に扱う人に時間あげないでね？もったいないから。`);
-    lines.push(`相手の言葉より、行動と生活の丁寧さを見て。そこに本性出るよ。`);
+    lines.push(`雑に扱う人に時間あげないで。もったいないから。言葉じゃなくて行動見てね？`);
   } else {
     lines.push(`恋愛は「会話の気持ちよさ」が鍵。無理しない相手が当たり。`);
   }
@@ -424,11 +239,9 @@ function makePublicText(ctx){
 
   lines.push(`## 健康`);
   if (ctx.toneKey === "soft"){
-    lines.push(`健康はね、あなたを守る土台だよ。だから丁寧に扱ってあげよ？`);
-    lines.push(`今日は睡眠と呼吸をちょっとだけ意識して。ほんとにそれだけで違うよ〜。`);
+    lines.push(`今日は睡眠と呼吸をちょっとだけ意識してね。あなたを守る土台だから、大事にしてあげよ？`);
   } else if (ctx.toneKey === "spicy"){
-    lines.push(`健康。寝ないと崩れるよ？ほんと。`);
-    lines.push(`今日は回復に寄せて。ちゃんと寝て、ちゃんと戻して。`);
+    lines.push(`寝ないで崩れて「時間ない」って言うの、ほんとに損だよ？今日は回復に寄せて。ちゃんと寝て。`);
   } else {
     lines.push(`健康は睡眠と食事がベース。今日は回復寄りにすると安定。`);
   }
@@ -440,30 +253,13 @@ function makePublicText(ctx){
   return lines.join("\n");
 }
 
-/* =========
-  裏メモ（専門用語あり）
-========= */
+/* --- 裏メモ --- */
 function makeDevText(ctx){
   const lines = [];
-  lines.push(`Kuma Fortune / Version 1.3`);
+  lines.push(`Kuma Fortune / Version 1.4`);
   lines.push(`---`);
-  lines.push(`[入力]`);
-  lines.push(`name=${ctx.name || ""}`);
-  lines.push(`dob=${ctx.dobStr}`);
-  lines.push(`place=${ctx.place}`);
-  lines.push(`time=${ctx.timeLabel}`);
-  lines.push(`tone=${ctx.toneKey}`);
-  lines.push(`today=${ctx.todayStr}`);
-  lines.push(``);
-  lines.push(`[計算（専門用語あり）]`);
-  lines.push(`Sun sign=${ctx.sunSign}`);
-  lines.push(`Moon sign=${ctx.moonSignInfo}`);
-  lines.push(`Mercury sign=${ctx.mercurySign}`);
-  lines.push(`Venus sign=${ctx.venusSign}`);
-  lines.push(`Mars sign=${ctx.marsSign}`);
-  lines.push(`LifePath=${ctx.lp}`);
-  lines.push(`typeKey=${ctx.typeKey}`);
-  lines.push(``);
+  lines.push(`[入力] name=${ctx.name || ""} dob=${ctx.dobStr} place=${ctx.place} time=${ctx.timeLabel} tone=${ctx.toneKey} today=${ctx.todayStr}`);
+  lines.push(`[計算] Sun=${ctx.sunSign} Moon=${ctx.moonSignInfo} Merc=${ctx.mercurySign} Ven=${ctx.venusSign} Mars=${ctx.marsSign} LP=${ctx.lp} typeKey=${ctx.typeKey}`);
   lines.push(`[主要アスペクト（簡易）]`);
   const aspPairs = [
     ["Sun","Moon","sun","moon"],
@@ -477,18 +273,10 @@ function makeDevText(ctx){
     const asp = aspectBetween(a,b);
     if (asp) lines.push(`${A} x ${B}: ${asp}`);
   }
-  lines.push(``);
-  lines.push(`[トランジット（今日）]`);
-  lines.push(`Today Sun=${ctx.todaySigns.sun}`);
-  lines.push(`Today Moon=${ctx.todaySigns.moon}`);
-  lines.push(`Today Mars=${ctx.todaySigns.mars}`);
-  lines.push(``);
-  lines.push(`[今日のひとことロジック]`);
-  lines.push(`todayKey=${todayKeyFrom(ctx)}  (moodElement_todayMoon × yourElement × yourStep)`);
+  lines.push(`[今日のひとことキー] ${signElement(ctx.todaySigns.moon)}_${ctx.typeKey.split("_")[0]}_${ctx.typeKey.split("_")[1]}`);
   return lines.join("\n");
 }
 
-/* 公開API */
 export function buildTexts(ctx){
   const type = TEXT_DB.types20[ctx.typeKey] ?? { name:"なぞのクマ", desc:"タイプ情報が見つからない。", tags:"-" };
   return {
