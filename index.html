@@ -1,34 +1,34 @@
 <!--
-  Kuma Fortune (Version 1) / 2026-01-04
+  Kuma Fortune / Version 1.1 / 2026-01-04
   ------------------------------------------------------------
-  目的：GitHub Pagesだけで完結する“ガチ寄り”占いの土台
-  - 天体計算：JSのみ（簡易アルゴリズム。実用的な精度を狙う）
-  - 出生時間が不明でも成立：月星座は「候補表示」対応
-  - 文章トーン：やさしめ / 標準 / 毒舌（本文もちゃんと変わる）
-  - クマタイプ：20タイプ（後でイラスト紐付けしやすい）
+  ✅ 目的：ふわふわ可愛い見た目 × 裏ではガチ計算（ギャップ設計）
+  ✅ 公開文章は「専門用語ゼロ」で分かりやすく
+  ✅ 裏メモ（根拠）は折りたたみで表示（読みたい人だけ）
+  ✅ GitHub Pages（静的サイト）だけで完結（APIなし）
   ------------------------------------------------------------
-  開発メモ：
-  - 後で改造しやすいように「UI(app.js)」「天体(astro.js)」「文章(fortune.js)」を分離
-  - “ガチ感”は「月星座」「主要惑星」「アスペクト」「トランジット」で出す
+  初心者向けメモ：
+  - 画面の見た目：css/style.css
+  - 文章の内容：js/fortune.js の TEXT_DB
+  - 計算の中身：js/astro.js（あとで精度アップ可能）
 -->
 <!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>クマ占い</title>
+  <title>クマ占い v1.1</title>
   <link rel="stylesheet" href="./css/style.css" />
 </head>
 
 <body>
 <div class="wrap">
-  <header>
-    <h1>クマ占いv01</h1>
-    <p class="sub">タイプ宣言 → 詳細鑑定（ボタン1回） / GitHub Pages完結</p>
+  <header class="hero">
+    <h1>クマ占い</h1>
+    <p class="sub">ふわふわ表示 / 裏ではガチ計算。ボタン1回で「タイプ＋詳細」。</p>
   </header>
 
   <div class="grid">
-    <!-- 左：入力 -->
+    <!-- 入力 -->
     <section class="card">
       <p class="sectionTitle">入力</p>
 
@@ -53,43 +53,51 @@
       <select id="tone">
         <option value="soft">やさしめ</option>
         <option value="normal" selected>標準</option>
-        <option value="spicy">毒舌</option>
+        <option value="spicy">毒舌（強め）</option>
       </select>
 
       <div class="btns">
         <button class="primary" id="gen">生成</button>
-        <button id="copy">コピー</button>
+        <button id="copy">結果をコピー</button>
         <button id="clear">クリア</button>
       </div>
 
       <p class="hint">
-        ※出生時間が不明でもOK（境界日の月星座は候補表示）。<br>
-        ※より厳密にする場合は後で天体計算（astro.js）を強化。
+        ※出生時間が不明でもOK（境界日の場合は「候補」として丁寧に表示）。<br>
+        ※裏メモをONにすると、計算の根拠が見れる（専門用語あり）。
       </p>
     </section>
 
-    <!-- 右：出力 -->
+    <!-- 出力 -->
     <section class="card" id="outputCard">
       <p class="sectionTitle">結果</p>
 
+      <!-- バッジ（専門用語は出さない：あくまで「ラベル」） -->
       <div class="mini">
-        <span class="pill">太陽</span><span id="badgeSun">-</span>
-        <span class="pill">月</span><span id="badgeMoon">-</span>
-        <span class="pill">数秘</span><span id="badgeLP">-</span>
+        <span class="pill">外で見せる顔</span><span id="badgeFace">-</span>
+        <span class="pill">本音のクセ</span><span id="badgeCore">-</span>
+        <span class="pill">誕生日の数字</span><span id="badgeNum">-</span>
       </div>
 
+      <!-- タイプ宣言（ここは一番見せたい） -->
       <div class="typeBox">
         <p class="typeTitle" id="typeTitle">タイプ：-</p>
         <p class="typeDesc" id="typeDesc">生年月日を入れて「生成」を押してね。</p>
         <div class="typeMeta" id="typeMeta">-</div>
       </div>
 
-      <label style="margin-top:12px;">鑑定文</label>
+      <label style="margin-top:12px;">鑑定文（公開向け）</label>
       <textarea id="out" readonly></textarea>
 
+      <!-- 裏メモ（専門用語あり：読みたい人だけ） -->
+      <details class="devbox">
+        <summary>うらメモ（計算の根拠・専門用語あり）</summary>
+        <textarea id="devout" readonly></textarea>
+      </details>
+
       <p class="hint">
-        ※この版は「太陽/月/水星/金星/火星 + 簡易アスペクト + 今日運（トランジット）」まで搭載。<br>
-        ※アセンダント/ハウスは出生時間と緯度経度が必要なので次段階。
+        ※公開向け文章は専門用語ゼロ。<br>
+        ※「うらメモ」は開発用（ガチ計算の説明）。公開しないなら削除してOK。
       </p>
     </section>
   </div>
