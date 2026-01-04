@@ -1,5 +1,5 @@
 <!--
-  Kuma Fortune / Version 1.5 / 2026-01-04
+  Kuma Fortune / Version 1.7 / 2026-01-04
   ------------------------------------------------------------
   ✅ 目的：ふわふわ可愛い見た目 × 裏ではガチ計算（ギャップ設計）
   ✅ 公開文章は「専門用語ゼロ」で分かりやすく
@@ -16,93 +16,100 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>クマ占い v1.5</title>
+  <title>クマ占いジェネレーター</title>
   <link rel="stylesheet" href="./css/style.css" />
 </head>
 
 <body>
-<div class="wrap">
-  <header class="hero">
-    <h1>クマ占い</h1>
-    <p class="sub">ふわふわ表示 / 裏ではガチ計算。ボタン1回で「タイプ＋詳細」。</p>
-  </header>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <h1>クマ占いジェネレーター</h1>
+        <p class="sub">Version 1（GitHub Pages公開用 / HTML+JSだけ）</p>
+      </div>
+      <div class="badge">
+        <span class="mini">公開テキスト</span>
+        <span class="mini muted">※開発メモはコード内だけ</span>
+      </div>
+    </header>
 
-  <div class="grid">
-    <!-- 入力 -->
-    <section class="card">
-      <p class="sectionTitle">入力</p>
+    <main class="grid">
+      <!-- 入力 -->
+      <section class="card">
+        <h2 class="sectionTitle">入力</h2>
 
-      <label>名前</label>
-      <input id="name" placeholder="例：山田 太郎" />
+        <label>名前</label>
+        <input id="name" placeholder="例：山田 太郎" />
 
-      <label>生年月日</label>
-      <input id="dob" type="date" />
+        <label>生年月日</label>
+        <input id="dob" type="date" />
 
-      <div class="row2">
-        <div>
-          <label>出生地</label>
-          <select id="place"></select>
+        <div class="row2">
+          <div>
+            <label>出生地（都道府県）</label>
+            <select id="place"></select>
+          </div>
+          <div>
+            <label>出生時間（ざっくり）</label>
+            <select id="time"></select>
+          </div>
         </div>
-        <div>
-          <label>出生時間</label>
-          <select id="time"></select>
+
+        <label>鑑定スタイル</label>
+        <select id="tone">
+          <option value="soft">やさしめ</option>
+          <option value="normal">標準</option>
+          <option value="spicy">毒舌（からかい）</option>
+        </select>
+
+        <div class="btns">
+          <button class="primary" id="gen">生成</button>
+          <button class="ghost" id="copy">結果をコピー</button>
+          <button class="ghost" id="clear">クリア</button>
         </div>
-      </div>
 
-      <label>鑑定スタイル</label>
-      <select id="tone">
-        <option value="soft">やさしめ</option>
-        <option value="normal" selected>標準</option>
-        <option value="spicy">毒舌（強め）</option>
-      </select>
+        <p class="hint">
+          デザイン変更：<code>css/style.css</code><br>
+          占い文章の追加：<code>js/fortune.js</code> の <b>TEXT_DB</b><br>
+          素材置き場：<code>assets/</code>
+        </p>
+      </section>
 
-      <div class="btns">
-        <button class="primary" id="gen">生成</button>
-        <button id="copy">結果をコピー</button>
-        <button id="clear">クリア</button>
-      </div>
+      <!-- 出力 -->
+      <section class="card" id="outputCard">
+        <h2 class="sectionTitle">出力</h2>
 
-      <p class="hint">
-        ※出生時間が不明でもOK（境界日の場合は「候補」として丁寧に表示）。<br>
-        ※裏メモをONにすると、計算の根拠が見れる（専門用語あり）。
-      </p>
-    </section>
+        <div class="badges">
+          <div class="b">
+            <span class="k">タイプ</span>
+            <span class="v" id="typeTitle">-</span>
+          </div>
+          <div class="b">
+            <span class="k">要約</span>
+            <span class="v" id="typeDesc">生年月日を入れて「生成」を押してね。</span>
+          </div>
+        </div>
 
-    <!-- 出力 -->
-    <section class="card" id="outputCard">
-      <p class="sectionTitle">結果</p>
+        <label style="margin-top:12px;">結果テキスト（公開用）</label>
+        <textarea id="out" readonly></textarea>
 
-      <!-- バッジ（専門用語は出さない：あくまで「ラベル」） -->
-      <div class="mini">
-        <span class="pill">外で見せる顔</span><span id="badgeFace">-</span>
-        <span class="pill">本音のクセ</span><span id="badgeCore">-</span>
-        <span class="pill">誕生日の数字</span><span id="badgeNum">-</span>
-      </div>
+        <!-- 折りたたみ：今日の3ステップ -->
+        <details class="todayBox">
+          <summary>今日の3ステップ（開く）</summary>
+          <pre id="todaySteps" class="steps"></pre>
+        </details>
 
-      <!-- タイプ宣言（ここは一番見せたい） -->
-      <div class="typeBox">
-        <p class="typeTitle" id="typeTitle">タイプ：-</p>
-        <p class="typeDesc" id="typeDesc">生年月日を入れて「生成」を押してね。</p>
-        <div class="typeMeta" id="typeMeta">-</div>
-      </div>
+        <p class="hint muted">
+          今日の3ステップはおまけ（折りたたみ）だよ。メインは人生鑑定。
+        </p>
+      </section>
+    </main>
 
-      <label style="margin-top:12px;">鑑定文（公開向け）</label>
-      <textarea id="out" readonly></textarea>
-
-      <!-- 裏メモ（専門用語あり：読みたい人だけ） -->
-      <details class="devbox">
-        <summary>うらメモ（計算の根拠・専門用語あり）</summary>
-        <textarea id="devout" readonly></textarea>
-      </details>
-
-      <p class="hint">
-        ※公開向け文章は専門用語ゼロ。<br>
-        ※「うらメモ」は開発用（ガチ計算の説明）。公開しないなら削除してOK。
-      </p>
-    </section>
+    <footer class="foot">
+      <span class="mini muted">© Kuma Fortune / Version 1</span>
+    </footer>
   </div>
-</div>
 
-<script type="module" src="./js/app.js"></script>
+  <script type="module" src="./js/app.js"></script>
 </body>
 </html>
