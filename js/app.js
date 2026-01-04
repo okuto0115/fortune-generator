@@ -1,9 +1,10 @@
 /*
-  app.js / Version 1.1
+  app.js / Version 1.3
   ------------------------------------------------------------
   ✅ UI操作（入力→出力）
   ✅ 出生地/出生時間はプルダウン
   ✅ 出生時間が不明でも「月」は候補で出す（嘘をつかない）
+  ✅ todayStr を fortune.js に渡す（今日のひとことを固定化するため）
 */
 
 import {
@@ -52,7 +53,6 @@ function initSelect(id, items, getValue=(x)=>x, getLabel=(x)=>x){
   }
 }
 
-/* 出生時間の選択オブジェクト */
 function getSelectedTime(){
   const v = $("time").value;
   return TIME_BLOCKS.find(x=>x.value===v) ?? TIME_BLOCKS[0];
@@ -128,7 +128,7 @@ function handleGenerate(){
   const timeObj = getSelectedTime();
   const timeLabel = timeObj.label;
 
-  // 出生情報：太陽・惑星は「その日のお昼」を代表で使う（初心者向け＆安定）
+  // 出生情報：太陽・惑星は「その日のお昼」を代表で使う（安定）
   const birthUTC = makeDateUTCFromJST(dobStr, 12, 0);
 
   const sunLon = sunEclipticLongitude(birthUTC);
@@ -137,9 +137,13 @@ function handleGenerate(){
   const moon = moonInfo(dobStr, timeObj);
   const moonSignInfo = moon.info;
 
-  const mercurySign = lonToSign(mercuryLon(birthUTC));
-  const venusSign   = lonToSign(venusLon(birthUTC));
-  const marsSign    = lonToSign(marsLon(birthUTC));
+  const mercLon = mercuryLon(birthUTC);
+  const venLon  = venusLon(birthUTC);
+  const marLon  = marsLon(birthUTC);
+
+  const mercurySign = lonToSign(mercLon);
+  const venusSign   = lonToSign(venLon);
+  const marsSign    = lonToSign(marLon);
 
   const lp = lifePath(dobStr);
   const typeKey = typeKeyFrom(sunSign, lp);
@@ -147,17 +151,14 @@ function handleGenerate(){
   // 今日（トランジット）
   const today = todayTransitSigns();
 
-  // 角度（アスペクト用）：今は最低限（Version 2で精密化予定）
-  // ※ moon.lon は時間によって変わるので、候補時は lon0 を採用（裏メモ用途）
-    // 角度（アスペクト用）
+  // 角度（アスペクト用）
   const lons = {
     sun: sunLon,
     moon: moon.lon,
-    mercury: mercuryLon(birthUTC),
-    venus: venusLon(birthUTC),
-    mars: marsLon(birthUTC)
+    mercury: mercLon,
+    venus: venLon,
+    mars: marLon
   };
-
 
   const result = buildTexts({
     name, place, dobStr, toneKey,
@@ -168,6 +169,7 @@ function handleGenerate(){
     mercurySign, venusSign, marsSign,
     lp, typeKey,
     todaySigns: { sun: today.sun, moon: today.moon, mars: today.mars },
+    todayStr: today.todayStr, // ★ Version 1.3：ここ重要
     lons
   });
 
