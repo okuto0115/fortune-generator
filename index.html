@@ -1,3 +1,8 @@
+<!--
+  Version 10 (internal memo)
+  - ふりがな(kana)追加（任意・推奨）
+  - 出生時間：長いプルダウン廃止 → 不明/入力切替 + 短い選択UI（時＋分）
+-->
 <!doctype html>
 <html lang="ja">
 <head>
@@ -12,7 +17,7 @@
     <header class="header">
       <h1>クマ占いジェネレーター</h1>
       <p class="sub">ふわふわ見た目 × 裏はガチ寄り（出生時間なしでも成立）</p>
-      <p class="ver">Version 1</p>
+      <p class="ver">Version 10</p>
     </header>
 
     <main class="grid">
@@ -20,20 +25,47 @@
       <section class="card">
         <h2 class="sectionTitle">入力</h2>
 
-        <label>名前</label>
+        <label>名前（漢字など）</label>
         <input id="name" placeholder="例：山田 太郎" autocomplete="name" />
+
+        <label>ふりがな（ひらがな・任意）</label>
+        <input id="kana" placeholder="例：やまだ たろう" />
 
         <label>生年月日</label>
         <input id="dob" type="date" />
 
-        <div class="row2">
-          <div>
-            <label>出生地（都道府県）</label>
-            <select id="pref"></select>
+        <label>出生地（都道府県）</label>
+        <select id="pref"></select>
+
+        <label>出生時間（任意）</label>
+        <div class="timeBlock">
+          <div class="timeMode">
+            <label class="radio">
+              <input type="radio" name="timeMode" id="timeModeUnknown" value="unknown" checked>
+              <span>不明</span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="timeMode" id="timeModeSet" value="set">
+              <span>入力する</span>
+            </label>
           </div>
-          <div>
-            <label>出生時間（任意）</label>
-            <select id="time"></select>
+
+          <div class="timePick" id="timePick" aria-hidden="true">
+            <div class="row2">
+              <div>
+                <label class="miniLabel">時</label>
+                <select id="timeHour"></select>
+              </div>
+              <div>
+                <label class="miniLabel">分</label>
+                <div class="seg">
+                  <button type="button" class="segBtn" data-min="00" id="min00">00</button>
+                  <button type="button" class="segBtn" data-min="30" id="min30">30</button>
+                </div>
+              </div>
+            </div>
+            <!-- 内部的に保持する値（HH:MM） -->
+            <input type="hidden" id="timeValue" value="不明" />
           </div>
         </div>
 
@@ -51,8 +83,8 @@
         </div>
 
         <p class="hint">
-          見た目：<b>css/style.css の :root</b> を触るだけで一気に変わるよ。<br>
-          文章：<b>js/data.js</b> に集約。ロジック：<b>js/fortune.js</b>。
+          デザイン：<b>css/style.css の :root</b><br>
+          文章：<b>js/data.js</b> ／ ロジック：<b>js/fortune.js</b>
         </p>
       </section>
 
@@ -80,7 +112,7 @@
         <textarea id="out" readonly></textarea>
 
         <p class="hint">
-          ※「出生時間」は今は任意（未入力でも成立）。後で上位モードとして拡張できる設計。
+          ※ふりがなが入ってると名前要素の精度が上がる（未入力でもOK）
         </p>
       </section>
     </main>
