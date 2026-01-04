@@ -1,39 +1,32 @@
-/*
-  fortune.js / Version 11 (stabilized)
-  ===================================
-  方針：
-  - ES Modules は使わない（export/import禁止）
-  - window.Utils と window.TYPES を参照（data.js側で用意）
-  - app.js から呼びやすいように window.FortuneEngine.run を提供
-  - 出生時間なしでも成立（ASC/ハウス無し）
-*/
+/* =========================================================
+  fortune.js / Version 10 (patched)
+  - ES Modulesは使わない（export禁止）
+  - app.js から呼べるように window.FortuneEngine.run を提供
+  - 出生時間は「精度ラベル」にだけ反映（ロジックは出生時間なしでも成立）
+========================================================= */
 
 (function () {
   "use strict";
 
-  const U = window.Utils || {};
-  const { hashString, mulberry32, clamp } = U;
-
-  // Utils に無い環境でも落ちないようにする
-  const safeTrim = U.safeTrim || function (s) { return (s ?? "").toString().trim(); };
-
-  // data.js 側：
-  // window.TYPES = [{ key, name, oneLine, img }, ...] を推奨（配列で統一）
-  const TYPES = window.TYPES;
-
-  if (!hashString || !mulberry32 || !clamp) {
+  // ===== deps =====
+  const U = window.Utils;
+  if (!U?.hashString || !U?.mulberry32 || !U?.clamp) {
     console.error("[fortune.js] Utils not loaded. window.Utils =", window.Utils);
     return;
   }
+
+  // data.js で window.TYPES が「配列」想定（次で再構築する前提）
+  // 例: [{ key:"t01", name:"...", oneLine:"...", axis:"...", img:"..." }, ...]
+  const TYPES = window.TYPES;
   if (!Array.isArray(TYPES) || TYPES.length === 0) {
-    console.error("[fortune.js] TYPES not loaded or invalid. window.TYPES =", window.TYPES);
-    return;
+    console.warn("[fortune.js] TYPES is missing. window.TYPES =", window.TYPES);
   }
+
+  const { hashString, mulberry32, clamp } = U;
 
   /* ---------------------------
     占星術（出生時間なしの範囲）
   --------------------------- */
-
   const SIGNS = [
     "牡羊座","牡牛座","双子座","蟹座","獅子座","乙女座",
     "天秤座","蠍座","射手座","山羊座","水瓶座","魚座"
@@ -62,34 +55,32 @@
   }
 
   function approxMoonSign(date){
-    // 月星座（超簡易）：出生時間がない前提で破綻しにくい軽量版
     const base = new Date("2000-01-06T00:00:00Z");
     const days = (date.getTime() - base.getTime()) / 86400000;
     const phase = ((days % 29.530588) + 29.530588) % 29.530588;
     const signIndex = Math.floor((phase / 29.530588) * 12);
-    return SIGNS[clamp(signIndex, 0, 11)];
+    return SIGNS[signIndex];
   }
 
   function elementBias(sign){
     const e = ELEMENT[sign];
     return {
-      fire:  { WORK: +8, LOVE: +2, MONEY:+2, LIFE:+1 },
-      earth: { WORK: +6, LOVE: +2, MONEY:+6, LIFE:+6 },
-      air:   { WORK: +4, LOVE: +6, MONEY:+2, LIFE:+2 },
-      water: { WORK: +2, LOVE: +8, MONEY:+1, LIFE:+4 }
-    }[e] || {WORK:0,LOVE:0,MONEY:0,LIFE:0};
+      fire:  { work: +8, love: +2, money:+2, health:+1 },
+      earth: { work: +6, love: +2, money:+6, health:+6 },
+      air:   { work: +4, love: +6, money:+2, health:+2 },
+      water: { work: +2, love: +8, money:+1, health:+4 }
+    }[e] || {work:0,love:0,money:0,health:0};
   }
 
   /* ---------------------------
     数秘
   --------------------------- */
-
   function reduceTo1Digit(n){
-    let x = n;
-    while (x > 9) {
-      x = String(x).split("").reduce((a,c)=>a+Number(c),0);
+    let sum = n;
+    while (sum > 9) {
+      sum = String(sum).split("").reduce((a,c)=>a+Number(c),0);
     }
-    return x || 9;
+    return sum || 9;
   }
 
   function lifePathNumber(date){
@@ -113,38 +104,37 @@
 
   function numerologyBias(lp){
     const map = {
-      1: {WORK:+8, LOVE:+1, MONEY:+3, LIFE:+1},
-      2: {WORK:+2, LOVE:+8, MONEY:+1, LIFE:+3},
-      3: {WORK:+4, LOVE:+5, MONEY:+2, LIFE:+1},
-      4: {WORK:+6, LOVE:+2, MONEY:+5, LIFE:+6},
-      5: {WORK:+5, LOVE:+3, MONEY:+2, LIFE:-1},
-      6: {WORK:+2, LOVE:+7, MONEY:+2, LIFE:+5},
-      7: {WORK:+3, LOVE:+1, MONEY:+2, LIFE:+4},
-      8: {WORK:+6, LOVE:+1, MONEY:+8, LIFE:+2},
-      9: {WORK:+3, LOVE:+5, MONEY:+2, LIFE:+2},
+      1: {work:+8, love:+1, money:+3, health:+1},
+      2: {work:+2, love:+8, money:+1, health:+3},
+      3: {work:+4, love:+5, money:+2, health:+1},
+      4: {work:+6, love:+2, money:+5, health:+6},
+      5: {work:+5, love:+3, money:+2, health:-1},
+      6: {work:+2, love:+7, money:+2, health:+5},
+      7: {work:+3, love:+1, money:+2, health:+4},
+      8: {work:+6, love:+1, money:+8, health:+2},
+      9: {work:+3, love:+5, money:+2, health:+2},
     };
-    return map[lp] ?? {WORK:0,LOVE:0,MONEY:0,LIFE:0};
+    return map[lp] ?? {work:0,love:0,money:0,health:0};
   }
 
   function yearBias(py){
     const map = {
-      1:{WORK:+3,LOVE:0,MONEY:+1,LIFE:0},
-      2:{WORK:0,LOVE:+2,MONEY:0,LIFE:+1},
-      3:{WORK:+1,LOVE:+1,MONEY:0,LIFE:0},
-      4:{WORK:+2,LOVE:0,MONEY:+1,LIFE:+2},
-      5:{WORK:+1,LOVE:0,MONEY:0,LIFE:-1},
-      6:{WORK:0,LOVE:+2,MONEY:0,LIFE:+2},
-      7:{WORK:0,LOVE:0,MONEY:0,LIFE:+1},
-      8:{WORK:+2,LOVE:0,MONEY:+2,LIFE:0},
-      9:{WORK:+1,LOVE:+1,MONEY:0,LIFE:+1},
+      1:{work:+3,love:0,money:+1,health:0},
+      2:{work:0,love:+2,money:0,health:+1},
+      3:{work:+1,love:+1,money:0,health:0},
+      4:{work:+2,love:0,money:+1,health:+2},
+      5:{work:+1,love:0,money:0,health:-1},
+      6:{work:0,love:+2,money:0,health:+2},
+      7:{work:0,love:0,money:0,health:+1},
+      8:{work:+2,love:0,money:+2,health:0},
+      9:{work:+1,love:+1,money:0,health:+1},
     };
-    return map[py] ?? {WORK:0,LOVE:0,MONEY:0,LIFE:0};
+    return map[py] ?? {work:0,love:0,money:0,health:0};
   }
 
   /* ---------------------------
     出生地（都道府県）補正
   --------------------------- */
-
   function regionOf(pref){
     if (!pref || pref==="未選択") return "unknown";
     const HOKKAIDO_TOHOKU = ["北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県"];
@@ -166,13 +156,13 @@
   function placeBias(pref){
     const r = regionOf(pref);
     const map = {
-      north:  {WORK:+2, LOVE:+1, MONEY:+1, LIFE:+4},
-      kanto:  {WORK:+4, LOVE:0,  MONEY:+3, LIFE:0},
-      chubu:  {WORK:+3, LOVE:0,  MONEY:+2, LIFE:+2},
-      kinki:  {WORK:+1, LOVE:+3, MONEY:+1, LIFE:0},
-      west:   {WORK:+2, LOVE:+1, MONEY:+1, LIFE:+1},
-      south:  {WORK:+1, LOVE:+3, MONEY:0,  LIFE:+2},
-      unknown:{WORK:0,  LOVE:0,  MONEY:0,  LIFE:0}
+      north:  {work:+2, love:+1, money:+1, health:+4},
+      kanto:  {work:+4, love:0,  money:+3, health:0},
+      chubu:  {work:+3, love:0,  money:+2, health:+2},
+      kinki:  {work:+1, love:+3, money:+1, health:0},
+      west:   {work:+2, love:+1, money:+1, health:+1},
+      south:  {work:+1, love:+3, money:0,  health:+2},
+      unknown:{work:0,  love:0,  money:0,  health:0}
     };
     return map[r] ?? map.unknown;
   }
@@ -180,16 +170,15 @@
   /* ---------------------------
     名前（kana優先の軽量補正）
   --------------------------- */
-
   function nameBias(nameLike){
     const name = nameLike || "";
     const s = name.replace(/\s/g,"");
     const len = s.length;
 
-    const bias = {WORK:0,LOVE:0,MONEY:0,LIFE:0};
+    const bias = {work:0,love:0,money:0,health:0};
 
-    if (len >= 6) { bias.LIFE += 2; bias.WORK += 1; }
-    if (len <= 3 && len > 0) { bias.WORK += 2; }
+    if (len >= 6) { bias.health += 2; bias.work += 1; }
+    if (len <= 3 && len > 0) { bias.work += 2; }
 
     const a = (s.match(/あ/g)||[]).length;
     const i = (s.match(/い/g)||[]).length;
@@ -199,9 +188,9 @@
     const total = a+i+u+e+o;
 
     if (total > 0){
-      bias.LOVE += Math.round((o+e) * 0.8);
-      bias.WORK += Math.round((i+a) * 0.6);
-      bias.LIFE += Math.round(u * 0.6);
+      bias.love += Math.round((o+e) * 0.8);
+      bias.work += Math.round((i+a) * 0.6);
+      bias.health += Math.round(u * 0.6);
     }
     return bias;
   }
@@ -209,21 +198,20 @@
   /* ---------------------------
     統合スコア
   --------------------------- */
-
   function mergeScores(...list){
-    const s = {WORK:0,LOVE:0,MONEY:0,LIFE:0};
+    const s = {work:0,love:0,money:0,health:0};
     for (const x of list){
-      s.WORK += x.WORK||0;
-      s.LOVE += x.LOVE||0;
-      s.MONEY += x.MONEY||0;
-      s.LIFE += x.LIFE||0;
+      s.work += x.work||0;
+      s.love += x.love||0;
+      s.money += x.money||0;
+      s.health += x.health||0;
     }
-    const base = {WORK:50,LOVE:50,MONEY:50,LIFE:50};
+    const base = {work:50,love:50,money:50,health:50};
     return {
-      WORK: clamp(base.WORK + s.WORK, 0, 100),
-      LOVE: clamp(base.LOVE + s.LOVE, 0, 100),
-      MONEY: clamp(base.MONEY + s.MONEY, 0, 100),
-      LIFE: clamp(base.LIFE + s.LIFE, 0, 100),
+      work: clamp(base.work + s.work, 0, 100),
+      love: clamp(base.love + s.love, 0, 100),
+      money: clamp(base.money + s.money, 0, 100),
+      health: clamp(base.health + s.health, 0, 100),
     };
   }
 
@@ -231,34 +219,27 @@
     const entries = Object.entries(profile).sort((a,b)=>b[1]-a[1]);
     const [top] = entries[0];
     const [sec] = entries[1];
-    return `${top}優勢（次点：${sec}）`;
+    const jp = {work:"仕事", money:"お金", love:"恋愛", health:"健康"};
+    return `${jp[top] || top}優勢（次点：${jp[sec] || sec}）`;
   }
 
-  function estimateLevel(pref, time){
-    const hasPref = !!(pref && pref !== "未選択");
-    const hasTime = !!(time && time !== "不明");
-    if (hasPref && hasTime) return "補助情報あり（拡張向け）";
-    if (hasPref) return "補助情報あり（出生地）";
-    if (hasTime) return "補助情報あり（出生時間）";
-    return "標準（出生時間なし）";
-  }
-
-  function pickTypeKeyByAxis(profile, seed){
+  function pickTypeKeyByProfile(profile, seed){
+    // 上位2軸→候補をseedで分散
     const order = Object.entries(profile).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
     const top = order[0];
     const second = order[1];
 
     const map = {
-      "WORK|LIFE": ["t01","t03","t15","t19"],
-      "WORK|MONEY":["t16","t05","t03","t15"],
-      "WORK|LOVE": ["t02","t07","t12","t18"],
-      "LOVE|LIFE": ["t04","t14","t20","t07"],
-      "LOVE|MONEY":["t12","t07","t04","t20"],
-      "MONEY|LIFE":["t05","t15","t20","t01"],
-      "MONEY|WORK":["t16","t03","t05","t15"],
-      "LIFE|WORK": ["t01","t19","t15","t03"],
-      "LIFE|LOVE": ["t14","t04","t20","t07"],
-      "LIFE|MONEY":["t05","t15","t20","t01"],
+      "work|health": ["t01","t03","t15","t19"],
+      "work|money":  ["t16","t05","t03","t15"],
+      "work|love":   ["t02","t07","t12","t18"],
+      "love|health": ["t04","t14","t20","t07"],
+      "love|money":  ["t12","t07","t04","t20"],
+      "money|health":["t05","t15","t20","t01"],
+      "money|work":  ["t16","t03","t05","t15"],
+      "health|work": ["t01","t19","t15","t03"],
+      "health|love": ["t14","t04","t20","t07"],
+      "health|money":["t05","t15","t20","t01"],
     };
 
     const key = `${top}|${second}`;
@@ -269,22 +250,31 @@
     return cands[idx];
   }
 
-  function safeDate(dobStr){
-    const d = new Date(dobStr);
-    return Number.isNaN(d.getTime()) ? null : d;
+  function estimateLevel(pref, timeValue){
+    const hasPref = pref && pref !== "未選択";
+    const hasTime = timeValue && timeValue !== "不明";
+    if (hasPref && hasTime) return "補助情報あり（拡張向け）";
+    if (hasPref) return "補助情報あり（出生地）";
+    if (hasTime) return "補助情報あり（出生時間）";
+    return "標準（出生時間なし）";
   }
 
-  /* ===========================
-    メイン：buildFortune
-  =========================== */
+  // ===== public runner =====
+  function run(input){
+    const dobStr = input?.dob || input?.dobStr || "";
+    const pref = input?.pref || "";
+    const name = input?.name || "";
+    const kana = input?.kana || "";
+    const timeValue = input?.birthTime || input?.timeValue || input?.time || "不明";
 
-  function buildFortune({ name, kana, dobStr, pref, time, yearNow }){
-    const birth = safeDate(dobStr);
-    if (!birth) {
+    const yearNow = (new Date()).getFullYear();
+
+    const birth = new Date(dobStr);
+    if (Number.isNaN(birth.getTime())) {
       return {
-        typeKey: TYPES[0].key,
-        scores: { overall: 50, work: 50, money: 50, love: 50, health: 50 },
-        meta: { level: "（日付不正）", axis: "（不明）" }
+        typeKey: "t01",
+        scores: { overall:50, work:50, money:50, love:50, health:50 },
+        meta: { axis:"-", level:"（日付が不正）" }
       };
     }
 
@@ -293,14 +283,13 @@
 
     const sun = signFromMonthDay(m,d);
     const moon = approxMoonSign(birth);
+
     const lp = lifePathNumber(birth);
     const py = personalYear(birth, yearNow);
 
-    const nameSource = safeTrim(kana) ? kana : name;
+    const seed = hashString(`${dobStr}|${pref||""}|${(name||"").toLowerCase()}|${(kana||"").toLowerCase()}`);
 
-    const seed = hashString(
-      `${dobStr}|${pref||""}|${(name||"").toLowerCase()}|${(kana||"").toLowerCase()}|${time||""}`
-    );
+    const nameSource = (kana && kana.trim()) ? kana : name;
 
     const profile = mergeScores(
       elementBias(sun),
@@ -311,62 +300,31 @@
       nameBias(nameSource)
     );
 
-    const typeKey = pickTypeKeyByAxis(profile, seed);
-    const type = TYPES.find(t=>t.key===typeKey) || TYPES[0];
+    const typeKey = pickTypeKeyByProfile(profile, seed);
 
-    // app.js が使いやすい形に変換（overall/work/money/love/health）
+    // app.js が期待するスコア構造へ
     const scores = {
-      overall: Math.round((profile.WORK + profile.MONEY + profile.LOVE + profile.LIFE) / 4),
-      work: profile.WORK,
-      money: profile.MONEY,
-      love: profile.LOVE,
-      health: profile.LIFE, // LIFE を健康枠として使う
+      overall: Math.round((profile.work + profile.money + profile.love + profile.health) / 4),
+      work: profile.work,
+      money: profile.money,
+      love: profile.love,
+      health: profile.health,
     };
 
+    // TYPESがあるなら拾う（無くても落ちない）
+    const typeObj = Array.isArray(TYPES) ? (TYPES.find(t=>t.key===typeKey) || TYPES[0]) : null;
+
     return {
-      typeKey: type.key,
-      type,
-      profile,
+      typeKey,
       scores,
       meta: {
         sun, moon, lp, py,
         axis: axisLabel(profile),
-        level: estimateLevel(pref, time),
-        seed
-      }
+        level: estimateLevel(pref, timeValue),
+        type: typeObj || null,
+      },
     };
   }
 
-  /* ===========================
-    app.js から呼ぶ入口
-  =========================== */
-
-  window.FortuneEngine = {
-    run(input){
-      const yearNow = new Date().getFullYear();
-      const res = buildFortune({
-        name: input?.name ?? "",
-        kana: input?.kana ?? "",
-        dobStr: input?.dob ?? input?.dobStr ?? "",
-        pref: input?.pref ?? "",
-        time: input?.birthTime ?? input?.time ?? "不明",
-        yearNow
-      });
-
-      return {
-        typeKey: res.typeKey,
-        scores: res.scores,
-        meta: {
-          ...res.meta,
-          typeName: res.type?.name ?? res.typeKey,
-          typeOneLine: res.type?.oneLine ?? "",
-          typeImg: res.type?.img ?? ""
-        }
-      };
-    }
-  };
-
-  // 互換（古い参照を拾う）
-  window.Fortune = window.FortuneEngine;
-
+  window.FortuneEngine = { run };
 })();
