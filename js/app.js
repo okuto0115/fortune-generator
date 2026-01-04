@@ -1,180 +1,131 @@
-/*
-  app.js / Version 2
-  ------------------------------------------------------------
-  ✅ 入力保持（localStorage）
-  ✅ 都道府県/出生時間：プルダウン
-  ✅ 生成ボタン1回で本文＋今日3ステップ
-*/
+/* =========================================================================
+  UIの動き（入力保持 / コピー / クリア）
+============================================================================ */
 
-import { pad2 } from "./utils.js";
-import {
-  TEXT_DB,
-  lifePath,
-  calcZodiacSign,
-  typeKeyFrom,
-  buildTodayBonus,
-  buildPublicText
-} from "./fortune.js";
+const $ = (id) => document.getElementById(id);
 
-const STORAGE_KEY = "kuma_fortune_v2_form";
+const STORAGE_KEY = "kuma_fortune_v31";
 
-const PREFECTURES = [
-  "都道府県",
-  "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
-  "茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県",
-  "新潟県","富山県","石川県","福井県","山梨県","長野県",
-  "岐阜県","静岡県","愛知県","三重県",
-  "滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県",
-  "鳥取県","島根県","岡山県","広島県","山口県",
-  "徳島県","香川県","愛媛県","高知県",
-  "福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"
-];
-
-const TIME_BLOCKS = [
-  { value:"unknown", label:"不明" },
-  { value:"early",   label:"早朝（5–8）" },
-  { value:"morning", label:"午前（8–12）" },
-  { value:"noon",    label:"昼（12–15）" },
-  { value:"eve",     label:"夕方（15–18）" },
-  { value:"night",   label:"夜（18–22）" },
-  { value:"late",    label:"深夜（22–5）" },
-];
-
-const $ = (id)=>document.getElementById(id);
-
-function initSelect(id, items, getValue, getLabel){
-  const el = $(id);
-  el.innerHTML = "";
-  for (const it of items){
+// 都道府県プルダウン生成
+function initPref(){
+  const sel = $("pref");
+  sel.innerHTML = "";
+  for (const p of PREFS){
     const opt = document.createElement("option");
-    opt.value = getValue(it);
-    opt.textContent = getLabel(it);
-    el.appendChild(opt);
+    opt.value = p;
+    opt.textContent = p;
+    sel.appendChild(opt);
   }
 }
 
-function readSaved(){
+// 入力保存・復元
+function saveState(){
+  const state = {
+    name: $("name").value,
+    dob: $("dob").value,
+    pref: $("pref").value,
+    timeblock: $("timeblock").value,
+    tone: $("tone").value
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  }catch{ return null; }
-}
-function writeSaved(st){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(st)); }catch{}
-}
-function clearSaved(){
-  try{ localStorage.removeItem(STORAGE_KEY); }catch{}
-}
-
-function currentState(){
-  return {
-    name: $("name").value ?? "",
-    dob: $("dob").value ?? "",
-    place: $("place").value ?? "都道府県",
-    time: $("time").value ?? "unknown",
-    tone: $("tone").value ?? "normal",
-  };
-}
-function applyState(st){
-  if (!st) return;
-  if (typeof st.name === "string") $("name").value = st.name;
-  if (typeof st.dob === "string") $("dob").value = st.dob;
-  if (typeof st.place === "string") $("place").value = st.place;
-  if (typeof st.time === "string") $("time").value = st.time;
-  if (typeof st.tone === "string") $("tone").value = st.tone;
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.name != null) $("name").value = s.name;
+    if (s.dob != null) $("dob").value = s.dob;
+    if (s.pref != null) $("pref").value = s.pref;
+    if (s.timeblock != null) $("timeblock").value = s.timeblock;
+    if (s.tone != null) $("tone").value = s.tone;
+  }catch(e){}
 }
 
-let saveTimer = null;
-function scheduleSave(){
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(()=> writeSaved(currentState()), 120);
+function clearState(){
+  localStorage.removeItem(STORAGE_KEY);
 }
+
+function renderResult(res){
+  $("bType").textContent = `タイプ：${res.badges.type}`;
+  $("bSign").textContent = `星座：${res.badges.sign}`;
+  $("bLP").textContent = `数秘：${res.badges.lp}`;
+
+  $("typeBox").hidden = false;
+  $("typeName").textContent = `🐻 ${res.type.name}`;
+  $("typeDesc").textContent = res.type.desc;
+
+  // ここは将来、タイプ別に画像を置いたら表示できる
+  // 例：assets/illust/T01.png を置く → 自動表示、みたいに拡張可能
+  const img = $("typeImg");
+  img.hidden = true;
+
+  $("out").value = res.text;
+
+  // 今日の3ステップ（折りたたみ）
+  $("stepsBox").hidden = false;
+  const ol = $("stepsList");
+  ol.innerHTML = "";
+  for (const s of res.steps){
+    const li = document.createElement("li");
+    li.textContent = s.text;
+    ol.appendChild(li);
+  }
+}
+
 function wireAutoSave(){
-  ["name","dob","place","time","tone"].forEach(id=>{
-    $(id).addEventListener("input", scheduleSave);
-    $(id).addEventListener("change", scheduleSave);
+  const ids = ["name","dob","pref","timeblock","tone"];
+  for (const id of ids){
+    $(id).addEventListener("change", saveState);
+    $(id).addEventListener("input", saveState);
+  }
+}
+
+function main(){
+  initPref();
+  loadState();
+  wireAutoSave();
+
+  $("gen").addEventListener("click", () => {
+    const dob = $("dob").value;
+    if (!dob) return alert("生年月日を入力してね");
+
+    const res = buildFortune({
+      name: $("name").value.trim() || "あなた",
+      dobStr: dob,
+      pref: $("pref").value,
+      timeblock: $("timeblock").value,
+      tone: $("tone").value
+    });
+
+    renderResult(res);
+    saveState();
+  });
+
+  $("copy").addEventListener("click", async () => {
+    const t = $("out").value;
+    if (!t.trim()) return alert("先に出力してね");
+    await navigator.clipboard.writeText(t);
+    alert("コピーしたよ");
+  });
+
+  $("clear").addEventListener("click", () => {
+    $("name").value = "";
+    $("dob").value = "";
+    $("pref").value = "不明";
+    $("timeblock").value = "unknown";
+    $("tone").value = "soft";
+
+    $("out").value = "";
+    $("bType").textContent = "タイプ：-";
+    $("bSign").textContent = "星座：-";
+    $("bLP").textContent = "数秘：-";
+    $("typeBox").hidden = true;
+    $("stepsBox").hidden = true;
+
+    clearState();
   });
 }
 
-function getTodayStr(){
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = pad2(now.getMonth()+1);
-  const d = pad2(now.getDate());
-  return `${y}-${m}-${d}`;
-}
-
-function handleGenerate(){
-  const dobStr = $("dob").value;
-  if (!dobStr) return alert("生年月日を入力してね");
-
-  const birthDate = new Date(dobStr);
-  const sunSign = calcZodiacSign(birthDate);
-  const lp = lifePath(dobStr);
-  const typeKey = typeKeyFrom(sunSign, lp);
-
-  const ctx = {
-    name: $("name").value.trim(),
-    dobStr,
-    place: $("place").value,
-    timeKey: $("time").value,
-    toneKey: $("tone").value,
-    sunSign,
-    lp,
-    typeKey,
-    todayStr: getTodayStr()
-  };
-
-  const todayBonus = buildTodayBonus(ctx);
-  const publicText = buildPublicText(ctx, todayBonus);
-
-  const type = TEXT_DB.types20[typeKey] ?? { name:"なぞのクマ", desc:"タイプ情報が見つからない。" };
-  $("typeTitle").textContent = type.name;
-  $("typeDesc").textContent = type.desc;
-
-  $("out").value = publicText;
-
-  $("todaySteps").textContent =
-    `① ${todayBonus.steps[0]}\n` +
-    `② ${todayBonus.steps[1]}\n` +
-    `③ ${todayBonus.steps[2]}`;
-
-  writeSaved(currentState());
-  $("outputCard").scrollIntoView({ behavior:"smooth", block:"start" });
-}
-
-async function handleCopy(){
-  const text = $("out").value;
-  if (!text.trim()) return alert("先に生成してね");
-  await navigator.clipboard.writeText(text);
-  alert("コピーしたよ");
-}
-
-function handleClear(){
-  $("name").value = "";
-  $("dob").value = "";
-  $("place").value = "都道府県";
-  $("time").value = "unknown";
-  $("tone").value = "normal";
-
-  $("typeTitle").textContent = "-";
-  $("typeDesc").textContent = "生年月日を入れて「生成」を押してね。";
-  $("out").value = "";
-  $("todaySteps").textContent = "";
-
-  clearSaved();
-}
-
-(function init(){
-  initSelect("place", PREFECTURES, x=>x, x=>x);
-  initSelect("time", TIME_BLOCKS, x=>x.value, x=>x.label);
-
-  applyState(readSaved());
-  wireAutoSave();
-
-  $("gen").addEventListener("click", handleGenerate);
-  $("copy").addEventListener("click", handleCopy);
-  $("clear").addEventListener("click", handleClear);
-
-  writeSaved(currentState());
-})();
+main();
