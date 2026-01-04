@@ -1,116 +1,36 @@
-<!--
-  Kuma Fortune / Version 1.7 / 2026-01-04
-  ------------------------------------------------------------
-  ✅ 目的：ふわふわ可愛い見た目 × 裏ではガチ計算（ギャップ設計）
-  ✅ 公開文章は「専門用語ゼロ」で分かりやすく
-  ✅ 裏メモ（根拠）は折りたたみで表示（読みたい人だけ）
-  ✅ GitHub Pages（静的サイト）だけで完結（APIなし）
-  ------------------------------------------------------------
-  初心者向けメモ：
-  - 画面の見た目：css/style.css
-  - 文章の内容：js/fortune.js の TEXT_DB
-  - 計算の中身：js/astro.js（あとで精度アップ可能）
--->
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>クマ占いジェネレーター</title>
-  <link rel="stylesheet" href="./css/style.css" />
+  <meta charset="UTF-8">
+  <title>クマ占い</title>
+  <link rel="stylesheet" href="css/style.css">
 </head>
-
 <body>
-  <div class="wrap">
-    <header class="top">
-      <div class="brand">
-        <h1>クマ占いジェネレーター</h1>
-        <p class="sub">Version 2（仕事・お金・恋愛 強化 / GitHub Pages公開用）</p>
-      </div>
-      <div class="badge">
-        <span class="mini">公開テキスト</span>
-        <span class="mini muted">※開発メモはコード内</span>
-      </div>
-    </header>
 
-    <main class="grid">
-      <!-- 入力 -->
-      <section class="card">
-        <h2 class="sectionTitle">入力</h2>
+<div class="app">
 
-        <label>名前</label>
-        <input id="name" placeholder="例：山田 太郎" />
+  <h1>🐻 クマ占い</h1>
 
-        <label>生年月日</label>
-        <input id="dob" type="date" />
+  <div class="panel">
+    <input id="name" placeholder="山田 太郎">
+    <input type="date" id="dob">
 
-        <div class="row2">
-          <div>
-            <label>出生地（都道府県）</label>
-            <select id="place"></select>
-          </div>
-          <div>
-            <label>出生時間（ざっくり）</label>
-            <select id="time"></select>
-          </div>
-        </div>
+    <select id="tone">
+      <option value="soft">やさしめ</option>
+      <option value="normal">標準</option>
+      <option value="spicy">毒舌</option>
+    </select>
 
-        <label>鑑定スタイル</label>
-        <select id="tone">
-          <option value="soft">やさしめ</option>
-          <option value="normal">標準</option>
-          <option value="spicy">毒舌（からかい）</option>
-        </select>
-
-        <div class="btns">
-          <button class="primary" id="gen">生成</button>
-          <button class="ghost" id="copy">結果をコピー</button>
-          <button class="ghost" id="clear">クリア</button>
-        </div>
-
-        <p class="hint">
-          デザイン変更：<code>css/style.css</code><br>
-          文章増やす：<code>js/fortune.js</code> の <b>POOLS</b><br>
-          素材：<code>assets/</code>
-        </p>
-      </section>
-
-      <!-- 出力 -->
-      <section class="card" id="outputCard">
-        <h2 class="sectionTitle">出力</h2>
-
-        <div class="badges">
-          <div class="b">
-            <span class="k">タイプ</span>
-            <span class="v" id="typeTitle">-</span>
-          </div>
-          <div class="b">
-            <span class="k">要約</span>
-            <span class="v" id="typeDesc">生年月日を入れて「生成」を押してね。</span>
-          </div>
-        </div>
-
-        <label style="margin-top:12px;">結果テキスト（公開用）</label>
-        <textarea id="out" readonly></textarea>
-
-        <!-- 折りたたみ：今日の3ステップ -->
-        <details class="todayBox">
-          <summary>今日の3ステップ（開く）</summary>
-          <pre id="todaySteps" class="steps"></pre>
-        </details>
-
-        <p class="hint muted">
-          「今日の3ステップ」はおまけ（折りたたみ）だよ。メインは人生鑑定（特に仕事・お金・恋愛）。
-        </p>
-      </section>
-    </main>
-
-    <footer class="foot">
-      <span class="mini muted">© Kuma Fortune / Version 2</span>
-    </footer>
+    <button id="generate">占う</button>
   </div>
 
-  <script type="module" src="./js/app.js"></script>
+  <pre id="result"></pre>
+
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/fortune.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
-
