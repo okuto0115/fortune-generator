@@ -1,3 +1,155 @@
+/* =========================================================
+  クマ占いジェネレーター / Version 1
+  ここ（:root）だけでだいたいデザイン変えられる
+========================================================= */
+
+:root{
+  --bg: #0b0b10;
+  --card: #12121b;
+  --text: #f6f6fb;
+  --muted: #b9b9c8;
+  --line: rgba(255,255,255,.12);
+  --accent: #8ab4ff;
+  --accent2: #ffb7d9;
+
+  --radius: 16px;
+  --pad: 16px;
+  --gap: 12px;
+
+  --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Noto Sans Mono", monospace;
+}
+
+*{ box-sizing:border-box; }
+
+body{
+  margin:0;
+  background:
+    radial-gradient(1200px 600px at 20% 0%, rgba(138,180,255,.18), transparent 55%),
+    radial-gradient(900px 500px at 90% 10%, rgba(255,183,217,.12), transparent 55%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.7;
+}
+
+.wrap{ max-width: 980px; margin: 0 auto; padding: 24px; }
+
+.header{ display:flex; flex-direction:column; gap:6px; margin-bottom: 16px; }
+.header h1{ font-size: 20px; margin:0; }
+.sub{ margin:0; color: var(--muted); font-size: 13px; }
+.ver{ margin:0; color: rgba(255,255,255,.55); font-size: 12px; }
+
+.grid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap);
+}
+@media (min-width: 900px){
+  .grid{ grid-template-columns: 360px 1fr; align-items:start; }
+}
+
+.card{
+  background: linear-gradient(180deg, rgba(255,255,255,.05), transparent 45%), var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--pad);
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+
+.sectionTitle{ font-size: 13px; color: var(--muted); margin: 0 0 10px; letter-spacing: .02em; }
+
+label{ display:block; font-size: 12px; color: var(--muted); margin: 10px 0 6px; }
+
+input, select{
+  width:100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.05);
+  color: var(--text);
+  outline: none;
+  font-size: 14px;
+}
+input::placeholder{ color: rgba(255,255,255,.35); }
+
+.row2{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+
+.btns{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
+button{
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  cursor:pointer;
+  font-size: 14px;
+}
+button.primary{
+  background: var(--accent);
+  border-color: transparent;
+  color: #0a1220;
+  font-weight: 800;
+}
+button:active{ transform: translateY(1px); }
+
+.hint{ font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+
+textarea{
+  width:100%;
+  min-height: 560px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.03);
+  color: var(--text);
+  padding: 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  white-space: pre-wrap;
+  line-height: 1.65;
+}
+
+.badges{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.pill{
+  display:inline-block;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  background: rgba(255,255,255,.03);
+}
+
+.typeBox{
+  margin-top: 12px;
+  display:flex;
+  gap: 12px;
+  align-items:center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: rgba(255,255,255,.03);
+}
+
+.typeImgWrap{
+  width: 64px; height: 64px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(40px 40px at 30% 30%, rgba(138,180,255,.25), transparent 60%),
+    radial-gradient(40px 40px at 70% 60%, rgba(255,183,217,.18), transparent 60%),
+    rgba(255,255,255,.02);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+}
+.typeImgWrap img{ width:100%; height:100%; object-fit:cover; display:none; }
+
+.typeName{ font-weight: 900; }
+.typeOneLine{ color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+
 /* 
   Version 10 (internal memo)
   - time UI：不明/入力切替 + 分セグメント
