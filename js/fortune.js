@@ -240,60 +240,99 @@ function makePublicText(ctx){
     : (TEXT_DB.coreLabel[ctx.moonSign] ?? "本音のクセ不明");
   const numLabel = TEXT_DB.numLabel[ctx.lp] ?? "";
 
+  // 今日（おまけ）
   const todayOne = makeTodayOneLine(ctx);
-  const steps = makeToday3Steps(ctx);
 
   const lines = [];
   lines.push(`# 🐻 ${type.name}`);
   lines.push(`${name}はね、ざっくり言うと「${type.desc}」って感じだよ。`);
   lines.push("");
 
-  lines.push(`## 今日のひとこと`);
-  lines.push(todayOne);
-  lines.push("");
-
-  lines.push(`## 今日の3ステップ（これだけでOK）`);
-  lines.push(`① ${steps[0]}`);
-  lines.push(`② ${steps[1]}`);
-  lines.push(`③ ${steps[2]}`);
-  lines.push("");
-
-  lines.push(`## ${name}の雰囲気`);
+  // ---- 人生鑑定をメインにする ----
+  lines.push(`## ${name}の性質（人生の土台）`);
   lines.push(`外で見せる顔は「${face}」だよ。周りからはそう見られやすいの。`);
-  lines.push(`でも本音のクセは「${core}」。ここ分かってると、無駄に疲れにくいよ。`);
-  lines.push(`それと、誕生日の数字は「${ctx.lp}（${numLabel}）」。あなたの伸び方のクセ、みたいなものだよ。`);
-  lines.push(ctx.timeLabel === "不明"
-    ? `出生時間は不明でも大丈夫だよ。必要なところは“候補”で丁寧に出してるからね。`
-    : `出生時間は「${ctx.timeLabel}」で見てるよ。`
-  );
+  lines.push(`でも本音のクセは「${core}」。ここ分かってると、人生の疲れ方が変わるよ。`);
+  lines.push(`誕生日の数字は「${ctx.lp}（${numLabel}）」。あなたの伸び方のクセ、みたいなものだよ。`);
   lines.push("");
 
-  // 本文（短めは維持）
-  lines.push(`## 仕事`);
+  lines.push(`## 人生の流れ（これから）`);
   if (ctx.toneKey === "soft"){
-    lines.push(`今日はね、“できる形で出して、あとで整える”がいちばん上手くいくよ。私が背中そっと押すね。`);
+    lines.push(`あなたはね、焦って一気に変えるより、ちゃんと積み上げて後から大きく回収するタイプだよ。ゆっくりで大丈夫。`);
+    lines.push(`「今の選択が未来の安心につながる」っていう流れになりやすいから、土台づくりを優先すると運が安定するよ。`);
   } else if (ctx.toneKey === "spicy"){
-    lines.push(`完璧にしてから動くの、遅いよ？小さく出して回しな。ほら、今できるやつから。`);
+    lines.push(`あなたは“一発逆転”より、積み上げで勝つタイプ。なのにサボると、ただ損するだけだよ？`);
+    lines.push(`未来を良くしたいなら、派手なことより“やめない仕組み”作りな。そこが勝ち筋。`);
   } else {
-    lines.push(`仕事は「小さく出して回す」が強い日。テンプレ化も効く。`);
+    lines.push(`積み上げ型で、後から回収しやすいタイプ。土台づくりが運勢を強くする。`);
+    lines.push(`派手さより継続が効く。仕組み化すると伸びが安定する。`);
   }
   lines.push("");
 
-  lines.push(`## お金`);
+  lines.push(`## 仕事（人生テーマ）`);
   if (ctx.toneKey === "soft"){
-    lines.push(`不安になっても大丈夫だよ。今日は“ルールを1個だけ”作ると安心が増える日なの。小さくでいいよ〜。`);
+    lines.push(`あなたの仕事運はね、“自分のペースで積んだもの”がちゃんと価値になるよ。焦らなくていいの。`);
+    lines.push(`できる形で少しずつ出していけば、評価は後からついてくるよ。`);
   } else if (ctx.toneKey === "spicy"){
-    lines.push(`数字から目そらしてるなら、やめよ？固定費かルール、1個だけ整えて。逃げないでね。`);
+    lines.push(`仕事はね、“出した人”が勝つの。完璧主義で止まってるなら、それただの逃げだよ？`);
+    lines.push(`小さく出して回して。やるならそこから。`);
   } else {
-    lines.push(`お金はルール化が最強。今日は1つ仕組みを整えると安定する。`);
+    lines.push(`仕事は「小さく出して回す」が強い。継続とテンプレ化が武器。`);
+    lines.push(`積み上げが評価につながりやすい。`);
   }
   lines.push("");
 
+  lines.push(`## お金（人生テーマ）`);
+  if (ctx.toneKey === "soft"){
+    lines.push(`お金はね、安心の土台だよ。あなたは“ルールを作るほど”守られるタイプ。`);
+    lines.push(`無理な節約より、固定費や仕組みで整えるとすごくラクになるよ。`);
+  } else if (ctx.toneKey === "spicy"){
+    lines.push(`お金の不安って、見ないから増えるんだよ？数字から逃げないで。`);
+    lines.push(`固定費かルール、どっちか1個整えて。やると一気に落ち着くから。`);
+  } else {
+    lines.push(`お金はルール化が効く。固定費・仕組みで安定しやすい。`);
+    lines.push(`守りを固めるほど増やしやすい。`);
+  }
+  lines.push("");
+
+  lines.push(`## 恋愛（人生テーマ）`);
+  if (ctx.toneKey === "soft"){
+    lines.push(`恋愛はね、あなたが安心できる相手ほど上手くいくよ。無理して盛り上げなくていいの。`);
+    lines.push(`会話が自然に続く人、あなたを急かさない人が相性いいよ。`);
+  } else if (ctx.toneKey === "spicy"){
+    lines.push(`恋愛は“雑に扱う人”に時間あげないで。もったいないから。`);
+    lines.push(`言葉じゃなくて、行動が丁寧な人を選びな。`);
+  } else {
+    lines.push(`恋愛は会話の気持ちよさが鍵。無理しない相手が当たり。`);
+    lines.push(`生活ペースが合う人ほど長続きしやすい。`);
+  }
+  lines.push("");
+
+  lines.push(`## 健康（人生テーマ）`);
+  if (ctx.toneKey === "soft"){
+    lines.push(`あなたはね、頑張りすぎると体が先に教えてくれるタイプ。だから休むのも才能だよ。`);
+    lines.push(`睡眠と呼吸を整えるだけで、運勢まで安定しやすいよ。`);
+  } else if (ctx.toneKey === "spicy"){
+    lines.push(`寝ないで崩れて「時間ない」は最悪のループ。自分の扱い雑すぎ。`);
+    lines.push(`回復できる体にして。そこから全部変わるから。`);
+  } else {
+    lines.push(`健康は睡眠と食事がベース。回復を優先すると運が安定する。`);
+    lines.push(`無理を溜めない設計が重要。`);
+  }
+  lines.push("");
+
+  // ---- トーンの締め ----
   lines.push(tonePack.header);
   lines.push(tonePack.closer);
+  lines.push("");
+
+  // ---- 今日（おまけ）を最後に小さく ----
+  lines.push(`---`);
+  lines.push(`## 今日のおまけ（1行）`);
+  lines.push(todayOne);
 
   return lines.join("\n");
 }
+
 
 /* ========= 裏メモ ========= */
 function makeDevText(ctx){
