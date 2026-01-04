@@ -1,8 +1,9 @@
 /*
-  app.js (Version 1)
+  app.js / Version 1.1
   ------------------------------------------------------------
-  UI操作と、astro.js / fortune.js を繋ぐ役
-  - 出生時間が不明でも破綻しない（月星座は候補表示）
+  ✅ UI操作（入力→出力）
+  ✅ 出生地/出生時間はプルダウン
+  ✅ 出生時間が不明でも「月」は候補で出す（嘘をつかない）
 */
 
 import {
@@ -12,9 +13,9 @@ import {
   makeDateUTCFromJST
 } from "./astro.js";
 
-import { lifePath, typeKeyFrom, buildFortuneText, TYPE_20 } from "./fortune.js";
+import { lifePath, typeKeyFrom, buildTexts, TEXT_DB } from "./fortune.js";
 
-/* ========= 公開UI用リスト ========= */
+/* 都道府県 */
 const PREFECTURES = [
   "都道府県",
   "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
@@ -27,10 +28,10 @@ const PREFECTURES = [
   "福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"
 ];
 
+/* 出生時間（不明が多い前提：ブロック選択） */
 const TIME_BLOCKS = [
-  // value: "unknown" 等にすると内部処理が楽
   { value:"unknown", label:"不明", hour:12, min:0 },
-  { value:"early",   label:"早朝（5–8）", hour:6, min:30 },
+  { value:"early",   label:"早朝（5–8）", hour:6,  min:30 },
   { value:"morning", label:"午前（8–12）", hour:9, min:30 },
   { value:"noon",    label:"昼（12–15）", hour:13, min:30 },
   { value:"eve",     label:"夕方（15–18）", hour:16, min:30 },
@@ -38,7 +39,8 @@ const TIME_BLOCKS = [
   { value:"late",    label:"深夜（22–5）", hour:23, min:30 },
 ];
 
-const $ = (id) => document.getElementById(id);
+const $ = (id)=>document.getElementById(id);
+
 function initSelect(id, items, getValue=(x)=>x, getLabel=(x)=>x){
   const el = $(id);
   el.innerHTML = "";
@@ -50,18 +52,24 @@ function initSelect(id, items, getValue=(x)=>x, getLabel=(x)=>x){
   }
 }
 
-/* ========= 月星座：不明対応 =========
-  - 出生時間が不明：その日の 00:00 と 23:59 JST で月星座が変わるなら「候補」表示
-  - 時間が分かる（ブロック選択）：代表時刻で計算して確定表示
+/* 出生時間の選択オブジェクト */
+function getSelectedTime(){
+  const v = $("time").value;
+  return TIME_BLOCKS.find(x=>x.value===v) ?? TIME_BLOCKS[0];
+}
+
+/*
+  月の扱い：
+  - 時間が分かる：代表時刻で確定
+  - 不明：その日の00:00と23:59で星座が変わるなら候補表示
 */
-function moonSignInfoFromInput(dobStr, timeObj){
+function moonInfo(dobStr, timeObj){
   if (timeObj.value !== "unknown"){
     const dateUTC = makeDateUTCFromJST(dobStr, timeObj.hour, timeObj.min);
     const lon = moonEclipticLongitude(dateUTC);
     return { info: lonToSign(lon), lon };
   }
 
-  // 不明：境界チェック
   const d0 = makeDateUTCFromJST(dobStr, 0, 0);
   const d1 = makeDateUTCFromJST(dobStr, 23, 59);
   const lon0 = moonEclipticLongitude(d0);
@@ -70,46 +78,43 @@ function moonSignInfoFromInput(dobStr, timeObj){
   const s1 = lonToSign(lon1);
 
   if (s0 === s1){
-    // 境界でない
-    return { info: s0, lon: (lon0 + lon1) / 2, boundary:false };
+    return { info: s0, lon:(lon0+lon1)/2, boundary:false };
   }
-  // 境界日：候補表示（嘘をつかない）
-  return { info: `候補：${s0} / ${s1}（出生時間で確定）`, lon: lon0, boundary:true };
+  return { info: `候補：${s0} / ${s1}（出生時間で確定）`, lon:lon0, boundary:true };
 }
 
-/* ========= 生成 ========= */
-function getSelectedTime(){
-  const v = $("time").value;
-  const t = TIME_BLOCKS.find(x => x.value === v) ?? TIME_BLOCKS[0];
-  return t;
+/* 表示用バッジ（専門用語を出さないラベル） */
+function setBadges({ sunSign, moonSignInfo, lp }){
+  const face = TEXT_DB.faceLabel[sunSign] ?? "-";
+  const core = moonSignInfo.includes("候補")
+    ? "二択っぽい（時間で変わる）"
+    : (TEXT_DB.coreLabel[moonSignInfo] ?? "-");
+  const num = TEXT_DB.numLabel[lp] ?? "";
+  $("badgeFace").textContent = face;
+  $("badgeCore").textContent = core;
+  $("badgeNum").textContent = `${lp}（${num}）`;
 }
 
-function formatBadges({ sunSign, moonInfo, lp }){
-  $("badgeSun").textContent = sunSign;
-  $("badgeMoon").textContent = moonInfo;
-  $("badgeLP").textContent = String(lp);
-}
-
-function setTypeUI(typeKey){
-  const info = TYPE_20[typeKey] ?? { name:"-", desc:"-", tags:"-" };
-  $("typeTitle").textContent = `タイプ：${info.name}`;
-  $("typeDesc").textContent = info.desc;
-  $("typeMeta").textContent = `${info.tags} / typeKey:${typeKey}`;
+function setTypeUI(typeInfo, typeKey){
+  $("typeTitle").textContent = `タイプ：${typeInfo.name}`;
+  $("typeDesc").textContent = typeInfo.desc;
+  $("typeMeta").textContent = `${typeInfo.tags} / typeKey:${typeKey}`;
 }
 
 function todayTransitSigns(){
-  // 今日（JST基準）の 12:00 を代表にする
   const now = new Date();
   const y = now.getFullYear();
   const m = String(now.getMonth()+1).padStart(2,"0");
   const d = String(now.getDate()).padStart(2,"0");
   const todayStr = `${y}-${m}-${d}`;
-  const dateUTC = makeDateUTCFromJST(todayStr, 12, 0);
 
-  const sun = lonToSign(sunEclipticLongitude(dateUTC));
-  const moon = lonToSign(moonEclipticLongitude(dateUTC));
-  const mars = lonToSign(marsLon(dateUTC));
-  return { sun, moon, mars, todayStr };
+  const dateUTC = makeDateUTCFromJST(todayStr, 12, 0);
+  return {
+    sun: lonToSign(sunEclipticLongitude(dateUTC)),
+    moon: lonToSign(moonEclipticLongitude(dateUTC)),
+    mars: lonToSign(marsLon(dateUTC)),
+    todayStr
+  };
 }
 
 function handleGenerate(){
@@ -123,41 +128,53 @@ function handleGenerate(){
   const timeObj = getSelectedTime();
   const timeLabel = timeObj.label;
 
-  // 天体計算（出生情報）
-  const birthUTC = makeDateUTCFromJST(dobStr, 12, 0); // 太陽などは日付中心でOK
+  // 出生情報：太陽・惑星は「その日のお昼」を代表で使う（初心者向け＆安定）
+  const birthUTC = makeDateUTCFromJST(dobStr, 12, 0);
+
   const sunLon = sunEclipticLongitude(birthUTC);
   const sunSign = lonToSign(sunLon);
 
-  const moon = moonSignInfoFromInput(dobStr, timeObj);
+  const moon = moonInfo(dobStr, timeObj);
   const moonSignInfo = moon.info;
 
-  const mercSign = lonToSign(mercuryLon(birthUTC));
-  const venSign  = lonToSign(venusLon(birthUTC));
-  const marsSign = lonToSign(marsLon(birthUTC));
+  const mercurySign = lonToSign(mercuryLon(birthUTC));
+  const venusSign   = lonToSign(venusLon(birthUTC));
+  const marsSign    = lonToSign(marsLon(birthUTC));
 
   const lp = lifePath(dobStr);
   const typeKey = typeKeyFrom(sunSign, lp);
 
+  // 今日（トランジット）
   const today = todayTransitSigns();
 
-  // バッジ & タイプUI
-  formatBadges({ sunSign, moonInfo: moonSignInfo, lp });
-  setTypeUI(typeKey);
+  // 角度（アスペクト用）：今は最低限（Version 2で精密化予定）
+  // ※ moon.lon は時間によって変わるので、候補時は lon0 を採用（裏メモ用途）
+  const lons = {
+    sun: sunLon,
+    moon: moon.lon,
+    mercury: 0, // Version 2で角度を埋める
+    venus: 0,
+    mars: 0
+  };
 
-  // 本文作成
-  const result = buildFortuneText({
-    name, place, timeLabel, dobStr, toneKey,
+  const result = buildTexts({
+    name, place, dobStr, toneKey,
+    timeLabel,
     sunSign,
     moonSignInfo,
-    mercurySign: mercSign,
-    venusSign: venSign,
-    marsSign,
-    lons: { sun:sunLon, moon:moon.lon, mercury:0, venus:0, mars:0 }, // 角度はサイン用途→後で精密化
+    moonSign: moonSignInfo.includes("候補") ? "（候補）" : moonSignInfo,
+    mercurySign, venusSign, marsSign,
     lp, typeKey,
-    todaySigns: { sun:today.sun, moon:today.moon, mars:today.mars }
+    todaySigns: { sun: today.sun, moon: today.moon, mars: today.mars },
+    lons
   });
 
-  $("out").value = result.text;
+  setBadges({ sunSign, moonSignInfo, lp });
+  setTypeUI(result.type, typeKey);
+
+  $("out").value = result.publicText;
+  $("devout").value = result.devText;
+
   $("outputCard").scrollIntoView({ behavior:"smooth", block:"start" });
 }
 
@@ -175,18 +192,18 @@ function handleClear(){
   $("time").value = "unknown";
   $("tone").value = "normal";
 
-  $("badgeSun").textContent = "-";
-  $("badgeMoon").textContent = "-";
-  $("badgeLP").textContent = "-";
+  $("badgeFace").textContent = "-";
+  $("badgeCore").textContent = "-";
+  $("badgeNum").textContent = "-";
 
   $("typeTitle").textContent = "タイプ：-";
   $("typeDesc").textContent = "生年月日を入れて「生成」を押してね。";
   $("typeMeta").textContent = "-";
 
   $("out").value = "";
+  $("devout").value = "";
 }
 
-/* ========= 初期化 ========= */
 (function init(){
   initSelect("place", PREFECTURES);
   initSelect("time", TIME_BLOCKS, x=>x.value, x=>x.label);
@@ -195,4 +212,3 @@ function handleClear(){
   $("copy").addEventListener("click", handleCopy);
   $("clear").addEventListener("click", handleClear);
 })();
-
