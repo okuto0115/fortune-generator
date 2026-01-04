@@ -10,7 +10,13 @@
   - fortune.js（占いロジック）は、ユーザーが指示しない限り今後改変しない。
 */
 
-export const PREFS = [
+/* =========================================================
+  クマ占いジェネレーター / data.js
+  Version 10 (internal memo)
+  - ES Modules を使わず、window に載せる（GitHub Pages初心者向け）
+========================================================= */
+
+window.PREFS = [
   "未選択",
   "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
   "茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県",
@@ -23,9 +29,10 @@ export const PREFS = [
 ];
 
 // 時間UI：長いプルダウンを避ける（時/分）
-export const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
-export const MINUTES = ["00", "30"];
-export const TIME_PRESETS = ["不明", "だいたい朝", "だいたい昼", "だいたい夕方", "だいたい夜"];
+window.HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
+window.MINUTES = ["00", "30"];
+window.TIME_PRESETS = ["不明", "だいたい朝", "だいたい昼", "だいたい夕方", "だいたい夜"];
+
 
 /* ========= 口調 ========= */
 export const TONES = {
