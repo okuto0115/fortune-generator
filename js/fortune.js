@@ -15,7 +15,7 @@
     return;
   }
 
-  // data.js で window.TYPES が「配列」想定（次で再構築する前提）
+  // data.js で window.TYPES が「配列」想定
   // 例: [{ key:"t01", name:"...", oneLine:"...", axis:"...", img:"..." }, ...]
   const TYPES = window.TYPES;
   if (!Array.isArray(TYPES) || TYPES.length === 0) {
@@ -23,6 +23,33 @@
   }
 
   const { hashString, mulberry32, clamp } = U;
+
+  /* ---------------------------
+    安全な日付パース（Safari対策）
+    - "YYYY/MM/DD" "YYYY-MM-DD" 両対応
+  --------------------------- */
+  function parseDob(dobStr) {
+    const s = String(dobStr || "").trim();
+    if (!s) return null;
+
+    const m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (!m) return null;
+
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+
+    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
+    if (mo < 1 || mo > 12) return null;
+    if (d < 1 || d > 31) return null;
+
+    // ローカル日付として固定（時間は使わない）
+    const dt = new Date(y, mo - 1, d);
+    // 念のため逆検証
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+
+    return dt;
+  }
 
   /* ---------------------------
     占星術（出生時間なしの範囲）
@@ -55,7 +82,8 @@
   }
 
   function approxMoonSign(date){
-    const base = new Date("2000-01-06T00:00:00Z");
+    // 月齢の簡易モデル（厳密ではない）
+    const base = new Date(Date.UTC(2000, 0, 6, 0, 0, 0));
     const days = (date.getTime() - base.getTime()) / 86400000;
     const phase = ((days % 29.530588) + 29.530588) % 29.530588;
     const signIndex = Math.floor((phase / 29.530588) * 12);
@@ -169,10 +197,17 @@
 
   /* ---------------------------
     名前（kana優先の軽量補正）
+    - カタカナ→ひらがな対応
   --------------------------- */
+  function kataToHira(str){
+    return String(str || "").replace(/[\u30A1-\u30F6]/g, ch => {
+      return String.fromCharCode(ch.charCodeAt(0) - 0x60);
+    });
+  }
+
   function nameBias(nameLike){
-    const name = nameLike || "";
-    const s = name.replace(/\s/g,"");
+    const raw = nameLike || "";
+    const s = kataToHira(raw).replace(/\s/g,"");
     const len = s.length;
 
     const bias = {work:0,love:0,money:0,health:0};
@@ -224,7 +259,6 @@
   }
 
   function pickTypeKeyByProfile(profile, seed){
-    // 上位2軸→候補をseedで分散
     const order = Object.entries(profile).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
     const top = order[0];
     const second = order[1];
@@ -269,12 +303,12 @@
 
     const yearNow = (new Date()).getFullYear();
 
-    const birth = new Date(dobStr);
-    if (Number.isNaN(birth.getTime())) {
+    const birth = parseDob(dobStr);
+    if (!birth) {
       return {
         typeKey: "t01",
         scores: { overall:50, work:50, money:50, love:50, health:50 },
-        meta: { axis:"-", level:"（日付が不正）" }
+        meta: { axis:"-", level:"（日付が不正）", type:null }
       };
     }
 
@@ -288,7 +322,6 @@
     const py = personalYear(birth, yearNow);
 
     const seed = hashString(`${dobStr}|${pref||""}|${(name||"").toLowerCase()}|${(kana||"").toLowerCase()}`);
-
     const nameSource = (kana && kana.trim()) ? kana : name;
 
     const profile = mergeScores(
@@ -302,7 +335,6 @@
 
     const typeKey = pickTypeKeyByProfile(profile, seed);
 
-    // app.js が期待するスコア構造へ
     const scores = {
       overall: Math.round((profile.work + profile.money + profile.love + profile.health) / 4),
       work: profile.work,
@@ -311,7 +343,6 @@
       health: profile.health,
     };
 
-    // TYPESがあるなら拾う（無くても落ちない）
     const typeObj = Array.isArray(TYPES) ? (TYPES.find(t=>t.key===typeKey) || TYPES[0]) : null;
 
     return {
