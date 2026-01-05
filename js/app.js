@@ -393,21 +393,30 @@ function updateBadges(result) {
   setText("badgeAxis", result?.meta?.axis ?? "-");
   setText("badgeLevel", result?.meta?.level ?? "-");
 
-  // ★ここが本命：右上カードの実IDが何でも拾う
   const nameText = typeObj?.name || result?.typeKey || "-";
   const descText = typeObj?.oneLine || "-";
 
-  // よくあるID候補（君のHTMLが何でも当たるように複数）
-  setTextFirstHit(
-    [
-      "badgeTypeName","typeName","kumaTypeName","kumaName",
-      "#badgeTypeName","#typeName","#kumaTypeName","#kumaName",
-      ".typeName",".kumaTypeName",".typeTitle"
-    ],
-    nameText
-  );
+  // --- 名前：まず候補に入れる（成功した要素を記録） ---
+  let nameEl = null;
+  const nameCandidates = [
+    "badgeTypeName","typeName","kumaTypeName","kumaName",
+    "#badgeTypeName","#typeName","#kumaTypeName","#kumaName",
+    ".typeName",".kumaTypeName",".typeTitle"
+  ];
 
-  setTextFirstHit(
+  for (const c of nameCandidates) {
+    const el = c.startsWith("#") || c.startsWith(".") || c.includes(" ")
+      ? document.querySelector(c)
+      : document.getElementById(c);
+    if (el) {
+      el.textContent = nameText;
+      nameEl = el;
+      break;
+    }
+  }
+
+  // --- 詳細：候補に入れる（ここで当たればOK） ---
+  const descHit = setTextFirstHit(
     [
       "badgeTypeDesc","typeDesc","kumaTypeDesc","kumaDesc",
       "#badgeTypeDesc","#typeDesc","#kumaTypeDesc","#kumaDesc",
@@ -415,7 +424,35 @@ function updateBadges(result) {
     ],
     descText
   );
+
+  // --- 保険：候補が外れてても「名前と同じカード内」に説明欄があるはずなので探して入れる ---
+  if (!descHit && nameEl) {
+    // 1) 近いコンテナ（カード）を探す
+    const card = nameEl.closest(".card, .typeCard, .resultCard, .panel, .box, .kumaCard") || nameEl.parentElement;
+
+    if (card) {
+      // 2) ありがちな説明欄候補をカード内で探す
+      const nearDesc =
+        card.querySelector('[data-role="typeDesc"]') ||
+        card.querySelector(".desc") ||
+        card.querySelector(".typeDesc") ||
+        card.querySelector(".subtitle") ||
+        card.querySelector(".sub") ||
+        card.querySelector("p") ||            // 最低限：pがあればそこに入れる
+        card.querySelector("div");            // それも無ければdiv
+
+      // 3) ただし「名前そのもの」に上書きしない
+      if (nearDesc && nearDesc !== nameEl) {
+        nearDesc.textContent = descText;
+      } else {
+        // 4) 最終手段：名前の次の要素に入れる
+        const next = nameEl.nextElementSibling;
+        if (next) next.textContent = descText;
+      }
+    }
+  }
 }
+
 
 /* =========================
   ボタン処理
