@@ -1,45 +1,19 @@
 /* =========================================================================
-  app.js / Version 10 (patched v10.1)
-  - time UI（不明/入力する + 時 + 00/30）対応
-  - バッジ更新（badgeType / badgeAxis / badgeLevel）
-  - 右上カードの「クマタイプ名・説明」も可能な限り自動で反映
-  - data.js の POOLS / TYPES 前提
+  app.js / Version 10 (FINAL)
+  - time UI対応（不明/入力する + 時 + 00/30）
+  - バッジ：badgeType / badgeAxis / badgeLevel / badgeTypeName / badgeTypeDesc（あれば）更新
+  - data.js 側が「type別 POOLS」を持っていても拾える（←口調反映の要）
 ============================================================================ */
 
 const $ = (sel) => document.querySelector(sel);
 
 function setText(id, text) {
   const el = document.getElementById(id);
-  if (el) el.textContent = text ?? "";
+  if (el) el.textContent = text;
 }
 function setValue(id, val) {
   const el = document.getElementById(id);
   if (el) el.value = val ?? "";
-}
-
-// id候補を順に探して見つかったら入れる（UI差分に強くする）
-function setTextAny(ids, text) {
-  for (const id of ids) {
-    const el = document.getElementById(id);
-    if (el) {
-      el.textContent = text ?? "";
-      return true;
-    }
-  }
-  return false;
-}
-
-// 画像枠がある場合に、srcを入れる（無ければ何もしない）
-function setImgAny(ids, src, alt = "") {
-  for (const id of ids) {
-    const el = document.getElementById(id);
-    if (el && el.tagName === "IMG") {
-      el.src = src;
-      el.alt = alt;
-      return true;
-    }
-  }
-  return false;
 }
 
 /* =========================
@@ -135,7 +109,7 @@ function runFortuneEngine(input) {
     return {
       typeKey: "t01",
       scores: { overall: 50, work: 50, money: 50, love: 50, health: 50 },
-      meta: { axis: "-", level: "fortune.js が見つからないためダミー表示", type: null },
+      meta: { axis: "-", level: "fortune.js が見つからないためダミー表示" },
     };
   }
 
@@ -159,79 +133,50 @@ async function getFortuneResult(input) {
   normalized.scores.love ??= result?.loveScore ?? 50;
   normalized.scores.health ??= result?.healthScore ?? 50;
 
-  // meta.type が無い場合、window.TYPES から引く保険
-  if (!normalized.meta.type && Array.isArray(window.TYPES)) {
-    normalized.meta.type = window.TYPES.find(t => t.key === normalized.typeKey) || null;
-  }
-
   return normalized;
 }
 
 /* =========================
-  右上カード（タイプ詳細）更新
+  POOLS 参照（type別も拾う）
 ========================= */
-function updateTypeCard(result) {
-  const typeKey = result?.typeKey ?? "-";
-  const typeObj = result?.meta?.type || (Array.isArray(window.TYPES) ? window.TYPES.find(t => t.key === typeKey) : null);
+function resolvePoolNode(node, result) {
+  // node が配列ならそのまま
+  if (Array.isArray(node)) return node;
 
-  const typeName = typeObj?.name || typeKey || "-";
-  const typeOneLine = typeObj?.oneLine || "-";
-  const axis = result?.meta?.axis || "-";
-  const level = result?.meta?.level || "-";
-
-  // idは環境差があり得るので、候補を複数用意
-  setTextAny(["typeKey", "cardTypeKey", "resultTypeKey", "kumaTypeKey", "typeCode"], typeKey);
-  setTextAny(["typeName", "cardTypeName", "resultTypeName", "kumaTypeName", "typeTitle"], typeName);
-  setTextAny(["typeDesc", "typeOneLine", "cardTypeDesc", "resultTypeDesc", "kumaTypeDesc", "typeSubtitle"], typeOneLine);
-
-  setTextAny(["typeAxis", "cardAxis", "resultAxis", "kumaAxis"], axis);
-  setTextAny(["typeLevel", "cardLevel", "resultLevel", "kumaLevel"], level);
-
-  // 画像がある場合（data.js の TYPES に img を追加する予定ならここで拾える）
-  if (typeObj?.img) {
-    setImgAny(["typeImg", "cardTypeImg", "resultTypeImg", "kumaTypeImg"], typeObj.img, typeName);
+  // node が { byType: {t01:[...], ...}, default:[...] } みたいな形なら拾う
+  if (node && typeof node === "object") {
+    const tk = result?.typeKey;
+    const byType = node.byType;
+    if (tk && byType && typeof byType === "object" && Array.isArray(byType[tk])) return byType[tk];
+    if (Array.isArray(node.default)) return node.default;
   }
+  return [];
 }
 
 /* =========================
   出力テキスト組み立て（POOLS）
+  ※「今日」ワードは data.js 側で封印している想定
 ========================= */
 function buildSectionsText({ toneKey, result, seedBase }) {
   const sections = ["overall", "work", "money", "love", "health"];
   const out = [];
-
-  const titles = {
-    overall: "🌍 全体運",
-    work: "💼 仕事運",
-    money: "💰 金運",
-    love: "❤️ 恋愛運",
-    health: "🫁 健康運",
-  };
 
   for (const sec of sections) {
     const score = result.scores?.[sec];
     const band = toBand(score);
 
     const node = window.POOLS?.sections?.[sec]?.[toneKey]?.[band];
+    const pool = resolvePoolNode(node, result);
 
-    // node が
-    // 1) 配列 -> そのまま使う
-    // 2) オブジェクト {t01:[], t02:[], ...} -> typeKey を使って配列を取り出す
-    // 3) 文字列 -> そのまま出す
-    let pool = node;
+    const chosen = pickDeterministic(pool, seedBase, `${sec}:${toneKey}:${band}:${result.typeKey}`);
 
-    if (pool && !Array.isArray(pool) && typeof pool === "object") {
-      pool = pool[result.typeKey] ?? pool.default ?? pool.any ?? pool.fallback ?? null;
-    }
-
-    let chosen = "";
-    if (Array.isArray(pool)) {
-      chosen = pickDeterministic(pool, seedBase, `${sec}:${toneKey}:${band}:${result.typeKey}`);
-    } else if (typeof pool === "string") {
-      chosen = pool;
-    } else {
-      chosen = "";
-    }
+    const titles = {
+      overall: "🌍 全体運",
+      work: "💼 仕事運",
+      money: "💰 金運",
+      love: "❤️ 恋愛運",
+      health: "🫁 健康運",
+    };
 
     out.push(`## ${titles[sec] || sec}`);
     out.push(chosen || "（文章が見つからないよ。data.js の POOLS を確認してね）");
@@ -241,6 +186,13 @@ function buildSectionsText({ toneKey, result, seedBase }) {
   return out.join("\n");
 }
 
+function buildFinalMessage({ toneKey, result, seedBase }) {
+  const band = toBand(result?.scores?.overall);
+  const node = window.POOLS?.finalMessage?.[toneKey]?.[band];
+  const pool = resolvePoolNode(node, result);
+  const chosen = pickDeterministic(pool, seedBase, `final:${toneKey}:${band}:${result.typeKey}`);
+  return chosen || "";
+}
 
 function formatDateJP(dobStr) {
   if (!dobStr) return "（未入力）";
@@ -256,6 +208,12 @@ function safeTrim(s) {
   return (s ?? "").toString().trim();
 }
 
+function findTypeObj(typeKey) {
+  const types = window.TYPES;
+  if (!Array.isArray(types)) return null;
+  return types.find(t => t.key === typeKey) || null;
+}
+
 function buildOutput({ input, toneKey, result }) {
   const seedBase = xfnv1a(
     [
@@ -269,31 +227,34 @@ function buildOutput({ input, toneKey, result }) {
     ].join("|")
   );
 
-  const typeObj = result?.meta?.type || (Array.isArray(window.TYPES) ? window.TYPES.find(t => t.key === result.typeKey) : null);
-  const typeName = typeObj?.name || result.typeKey || "-";
-  const typeOneLine = typeObj?.oneLine || "";
+  const typeObj = findTypeObj(result.typeKey);
 
   const header = [];
-  header.push(`# 🔮 占い結果`);
-  header.push("");
-  header.push(`名前：${safeTrim(input.name) || "（未入力）"}`);
+  header.push(`# 🐻 クマ占い：${safeTrim(input.name) || "（名前未入力）"}`);
   if (safeTrim(input.kana)) header.push(`ふりがな：${safeTrim(input.kana)}`);
+  header.push("");
   header.push(`生年月日：${formatDateJP(input.dob)}`);
   header.push(`出生地：${safeTrim(input.pref) || "（未選択）"}`);
   header.push(`出生時間：${safeTrim(input.timeValue) || "不明"}`);
-  header.push(`口調：${toneKey === "soft" ? "やさしめ" : toneKey === "standard" ? "標準" : "毒舌"}`);
   header.push("");
 
-  header.push(`## 🧸 クマタイプ`);
-  header.push(`あなたのクマタイプは **${typeName}（${result.typeKey}）** だよ。`);
-  if (typeOneLine) header.push(typeOneLine);
+  header.push(`## ✅ あなたのクマタイプ：${typeObj?.name || result.typeKey}`);
+  header.push(`${typeObj?.oneLine || "（タイプ説明は data.js の TYPES で編集できるよ）"}`);
   header.push("");
 
   // 本文
   const body = buildSectionsText({ toneKey, result, seedBase });
+
+  // 最後の一言（長め・感情強め）
+  const finalMsg = buildFinalMessage({ toneKey, result, seedBase });
+  if (finalMsg) {
+    header.push(`## 🕊 最後に`);
+    header.push(finalMsg);
+    header.push("");
+  }
+
   return header.join("\n") + body;
 }
-
 /* =========================
   time UI（index.html仕様）
 ========================= */
@@ -408,15 +369,19 @@ function clearUI() {
   setText("badgeType", "-");
   setText("badgeAxis", "-");
   setText("badgeLevel", "-");
-
-  // 右上カードもクリア
-  updateTypeCard({ typeKey: "-", meta: { type: null, axis: "-", level: "-" } });
+  setText("badgeTypeName", "-");
+  setText("badgeTypeDesc", "-");
 }
 
 function updateBadges(result) {
+  const typeObj = findTypeObj(result?.typeKey);
   setText("badgeType", result?.typeKey ?? "-");
   setText("badgeAxis", result?.meta?.axis ?? "-");
   setText("badgeLevel", result?.meta?.level ?? "-");
+  if (typeObj) {
+    setText("badgeTypeName", typeObj.name);
+    setText("badgeTypeDesc", typeObj.oneLine);
+  }
 }
 
 /* =========================
@@ -444,7 +409,6 @@ async function onGenerate() {
   const result = await getFortuneResult(engineInput);
 
   updateBadges(result);
-  updateTypeCard(result);
 
   const text = buildOutput({ input, toneKey, result });
   const out = $("#out");
