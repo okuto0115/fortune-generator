@@ -200,20 +200,38 @@ function buildSectionsText({ toneKey, result, seedBase }) {
   const sections = ["overall", "work", "money", "love", "health"];
   const out = [];
 
+  const titles = {
+    overall: "🌍 全体運",
+    work: "💼 仕事運",
+    money: "💰 金運",
+    love: "❤️ 恋愛運",
+    health: "🫁 健康運",
+  };
+
   for (const sec of sections) {
     const score = result.scores?.[sec];
     const band = toBand(score);
 
-    const pool = window.POOLS?.sections?.[sec]?.[toneKey]?.[band];
-    const chosen = pickDeterministic(pool, seedBase, `${sec}:${toneKey}:${band}:${result.typeKey}`);
+    const node = window.POOLS?.sections?.[sec]?.[toneKey]?.[band];
 
-    const titles = {
-      overall: "🌍 全体運",
-      work: "💼 仕事運",
-      money: "💰 金運",
-      love: "❤️ 恋愛運",
-      health: "🫁 健康運",
-    };
+    // node が
+    // 1) 配列 -> そのまま使う
+    // 2) オブジェクト {t01:[], t02:[], ...} -> typeKey を使って配列を取り出す
+    // 3) 文字列 -> そのまま出す
+    let pool = node;
+
+    if (pool && !Array.isArray(pool) && typeof pool === "object") {
+      pool = pool[result.typeKey] ?? pool.default ?? pool.any ?? pool.fallback ?? null;
+    }
+
+    let chosen = "";
+    if (Array.isArray(pool)) {
+      chosen = pickDeterministic(pool, seedBase, `${sec}:${toneKey}:${band}:${result.typeKey}`);
+    } else if (typeof pool === "string") {
+      chosen = pool;
+    } else {
+      chosen = "";
+    }
 
     out.push(`## ${titles[sec] || sec}`);
     out.push(chosen || "（文章が見つからないよ。data.js の POOLS を確認してね）");
@@ -222,6 +240,7 @@ function buildSectionsText({ toneKey, result, seedBase }) {
 
   return out.join("\n");
 }
+
 
 function formatDateJP(dobStr) {
   if (!dobStr) return "（未入力）";
