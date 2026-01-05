@@ -1,8 +1,7 @@
 /* =========================================================================
-  app.js / Version 10 (FINAL)
-  - time UI対応（不明/入力する + 時 + 00/30）
-  - バッジ：badgeType / badgeAxis / badgeLevel / badgeTypeName / badgeTypeDesc（あれば）更新
-  - data.js 側が「type別 POOLS」を持っていても拾える（←口調反映の要）
+  app.js / Version 10.1 (FINAL)
+  - 右上カードのタイプ名/説明：複数候補ID/セレクタに対応して必ず表示
+  - 「最後に」は本文(5運勢)の“後ろ”へ移動
 ============================================================================ */
 
 const $ = (sel) => document.querySelector(sel);
@@ -14,6 +13,19 @@ function setText(id, text) {
 function setValue(id, val) {
   const el = document.getElementById(id);
   if (el) el.value = val ?? "";
+}
+
+/* =========================
+  便利：複数候補にセット
+========================= */
+function setTextFirstHit(candidates, text) {
+  for (const c of candidates) {
+    const el = typeof c === "string"
+      ? (c.startsWith("#") || c.startsWith(".") || c.includes(" ") ? document.querySelector(c) : document.getElementById(c))
+      : null;
+    if (el) { el.textContent = text; return true; }
+  }
+  return false;
 }
 
 /* =========================
@@ -140,10 +152,8 @@ async function getFortuneResult(input) {
   POOLS 参照（type別も拾う）
 ========================= */
 function resolvePoolNode(node, result) {
-  // node が配列ならそのまま
   if (Array.isArray(node)) return node;
 
-  // node が { byType: {t01:[...], ...}, default:[...] } みたいな形なら拾う
   if (node && typeof node === "object") {
     const tk = result?.typeKey;
     const byType = node.byType;
@@ -155,7 +165,6 @@ function resolvePoolNode(node, result) {
 
 /* =========================
   出力テキスト組み立て（POOLS）
-  ※「今日」ワードは data.js 側で封印している想定
 ========================= */
 function buildSectionsText({ toneKey, result, seedBase }) {
   const sections = ["overall", "work", "money", "love", "health"];
@@ -213,7 +222,6 @@ function findTypeObj(typeKey) {
   if (!Array.isArray(types)) return null;
   return types.find(t => t.key === typeKey) || null;
 }
-
 function buildOutput({ input, toneKey, result }) {
   const seedBase = xfnv1a(
     [
@@ -242,19 +250,21 @@ function buildOutput({ input, toneKey, result }) {
   header.push(`${typeObj?.oneLine || "（タイプ説明は data.js の TYPES で編集できるよ）"}`);
   header.push("");
 
-  // 本文
+  // 本文（5運勢）
   const body = buildSectionsText({ toneKey, result, seedBase });
 
-  // 最後の一言（長め・感情強め）
+  // 最後の一言（本文の後ろへ）
   const finalMsg = buildFinalMessage({ toneKey, result, seedBase });
+  const tail = [];
   if (finalMsg) {
-    header.push(`## 🕊 最後に`);
-    header.push(finalMsg);
-    header.push("");
+    tail.push(`## 🕊 最後に`);
+    tail.push(finalMsg);
+    tail.push("");
   }
 
-  return header.join("\n") + body;
+  return header.join("\n") + body + tail.join("\n");
 }
+
 /* =========================
   time UI（index.html仕様）
 ========================= */
@@ -369,19 +379,42 @@ function clearUI() {
   setText("badgeType", "-");
   setText("badgeAxis", "-");
   setText("badgeLevel", "-");
-  setText("badgeTypeName", "-");
-  setText("badgeTypeDesc", "-");
+
+  // 右上カード系も一応消す
+  setTextFirstHit(["badgeTypeName","badgeTypeDesc","#badgeTypeName","#badgeTypeDesc",".typeName",".typeDesc"], "-");
+  setTextFirstHit(["typeName","kumaTypeName","kumaName","#typeName","#kumaTypeName","#kumaName"], "-");
+  setTextFirstHit(["typeDesc","kumaTypeDesc","kumaDesc","#typeDesc","#kumaTypeDesc","#kumaDesc"], "-");
 }
 
 function updateBadges(result) {
   const typeObj = findTypeObj(result?.typeKey);
+
   setText("badgeType", result?.typeKey ?? "-");
   setText("badgeAxis", result?.meta?.axis ?? "-");
   setText("badgeLevel", result?.meta?.level ?? "-");
-  if (typeObj) {
-    setText("badgeTypeName", typeObj.name);
-    setText("badgeTypeDesc", typeObj.oneLine);
-  }
+
+  // ★ここが本命：右上カードの実IDが何でも拾う
+  const nameText = typeObj?.name || result?.typeKey || "-";
+  const descText = typeObj?.oneLine || "-";
+
+  // よくあるID候補（君のHTMLが何でも当たるように複数）
+  setTextFirstHit(
+    [
+      "badgeTypeName","typeName","kumaTypeName","kumaName",
+      "#badgeTypeName","#typeName","#kumaTypeName","#kumaName",
+      ".typeName",".kumaTypeName",".typeTitle"
+    ],
+    nameText
+  );
+
+  setTextFirstHit(
+    [
+      "badgeTypeDesc","typeDesc","kumaTypeDesc","kumaDesc",
+      "#badgeTypeDesc","#typeDesc","#kumaTypeDesc","#kumaDesc",
+      ".typeDesc",".kumaTypeDesc",".typeSubtitle"
+    ],
+    descText
+  );
 }
 
 /* =========================
