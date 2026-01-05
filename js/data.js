@@ -485,7 +485,7 @@
           .replace("自分に嘘つくな。", `自分に嘘つくな`)
           .replace("どうせまたサボるんでしょ。", `どうせまたサボるんでしょ`)
           .replace("ここまで来たならやるしかない。", `ここまで来たなら、やるしかない`)
-        ).map(s => `${nameのくせに、${s}`);
+        ).map(s => `${name}のくせに、${s}`);
         const close = FINAL_BASE.toxic.close;
         POOLS.final.toxic[tk] = gen20(lead, core, close);
       }
