@@ -171,11 +171,11 @@ function buildSectionsText({ toneKey, result, seedBase }) {
     const chosen = pickDeterministic(pool, seedBase, `${sec}:${toneKey}:${band}:${result.typeKey}`);
 
     const titles = {
+      overall: "🌍 全体運",
       work: "💼 仕事運",
       money: "💰 金運",
       love: "❤️ 恋愛運",
       health: "🫁 健康運",
-      overall: "🌍 全体運",
     };
 
     out.push(`## ${titles[sec] || sec}`);
