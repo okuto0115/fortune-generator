@@ -1,8 +1,9 @@
 /* =========================================================================
-  app.js / Version 10 (patched)
-  - index.html の time UI（不明/入力する + 時 + 00/30）に対応
-  - バッジは index.html の badgeType / badgeAxis / badgeLevel を更新
-  - data.js の POOLS / TYPES 前提（次に再構築する）
+  app.js / Version 10 (stable + typeKey-aware POOLS)
+  - data.js の POOLS を「typeKey別」に参照する
+  - 最後の一言（POOLS.final）を追加
+  - SafariのDateパース事故を避ける
+  - TYPES 表示（t01→名前表示）
 ============================================================================ */
 
 const $ = (sel) => document.querySelector(sel);
@@ -84,6 +85,15 @@ function normalizeTone(uiToneValue) {
 }
 
 /* =========================
+  TYPES
+========================= */
+function getTypeInfo(typeKey){
+  const types = window.TYPES;
+  if (!Array.isArray(types)) return null;
+  return types.find(t => t.key === typeKey) || null;
+}
+
+/* =========================
   fortune.js 呼び出し
 ========================= */
 function runFortuneEngine(input) {
@@ -137,26 +147,58 @@ async function getFortuneResult(input) {
 }
 
 /* =========================
-  出力テキスト組み立て（POOLS）
+  日付表示（Safari事故回避）
 ========================= */
+function formatDateJP(dobStr) {
+  const s = String(dobStr || "").trim();
+  const m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (!m) return "（不正な日付）";
+  const y = m[1];
+  const mm = String(m[2]).padStart(2, "0");
+  const dd = String(m[3]).padStart(2, "0");
+  return `${y}/${mm}/${dd}`;
+}
+
+function safeTrim(s) {
+  return (s ?? "").toString().trim();
+}
+
+/* =========================
+  POOLS参照（typeKey別）
+========================= */
+function getPoolSection(sec, toneKey, band, typeKey) {
+  const base = window.POOLS?.sections?.[sec]?.[toneKey]?.[band];
+  if (!base) return null;
+
+  // typeKey別があるならそれを優先
+  const byType = base?.[typeKey];
+  if (Array.isArray(byType) && byType.length) return byType;
+
+  // fallback: any
+  const any = base?.any;
+  if (Array.isArray(any) && any.length) return any;
+
+  return null;
+}
+
 function buildSectionsText({ toneKey, result, seedBase }) {
   const sections = ["overall", "work", "money", "love", "health"];
   const out = [];
+
+  const titles = {
+    overall: "🌍 人生の流れ（全体運）",
+    work: "💼 仕事運",
+    money: "💰 金運",
+    love: "❤️ 恋愛運",
+    health: "🫁 健康運",
+  };
 
   for (const sec of sections) {
     const score = result.scores?.[sec];
     const band = toBand(score);
 
-    const pool = window.POOLS?.sections?.[sec]?.[toneKey]?.[band];
+    const pool = getPoolSection(sec, toneKey, band, result.typeKey);
     const chosen = pickDeterministic(pool, seedBase, `${sec}:${toneKey}:${band}:${result.typeKey}`);
-
-    const titles = {
-      overall: "🌍 全体運",
-      work: "💼 仕事運",
-      money: "💰 金運",
-      love: "❤️ 恋愛運",
-      health: "🫁 健康運",
-    };
 
     out.push(`## ${titles[sec] || sec}`);
     out.push(chosen || "（文章が見つからないよ。data.js の POOLS を確認してね）");
@@ -166,20 +208,18 @@ function buildSectionsText({ toneKey, result, seedBase }) {
   return out.join("\n");
 }
 
-function formatDateJP(dobStr) {
-  if (!dobStr) return "（未入力）";
-  const d = new Date(dobStr);
-  if (Number.isNaN(d.getTime())) return "（不正な日付）";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}/${m}/${day}`;
+function buildFinalLine({ toneKey, result, seedBase }) {
+  const base = window.POOLS?.final?.[toneKey];
+  if (!base) return "";
+  const pool = base?.[result.typeKey] || base?.any;
+  if (!Array.isArray(pool) || pool.length === 0) return "";
+  const chosen = pickDeterministic(pool, seedBase, `final:${toneKey}:${result.typeKey}`);
+  return chosen || "";
 }
 
-function safeTrim(s) {
-  return (s ?? "").toString().trim();
-}
-
+/* =========================
+  出力
+========================= */
 function buildOutput({ input, toneKey, result }) {
   const seedBase = xfnv1a(
     [
@@ -204,14 +244,29 @@ function buildOutput({ input, toneKey, result }) {
   header.push(`口調：${toneKey === "soft" ? "やさしめ" : toneKey === "standard" ? "標準" : "毒舌"}`);
   header.push("");
 
-  header.push(`## 🧸 クマタイプ`);
-  header.push(`あなたは **${result.typeKey}** タイプだよ。`);
+  header.push(`## 🧸 あなたのクマタイプ`);
+  const t = getTypeInfo(result.typeKey);
+  if (t) {
+    header.push(`**${t.name}**`);
+    if (t.oneLine) header.push(t.oneLine);
+  } else {
+    header.push(`あなたは **${result.typeKey}** タイプだよ。`);
+  }
   header.push("");
 
-  // 本文
+  // 本文（未来の運勢：今日の〜は書かない）
   const body = buildSectionsText({ toneKey, result, seedBase });
 
-  return header.join("\n") + body;
+  // 最後の一言（少し長め：泣かせる／心折る）
+  const last = buildFinalLine({ toneKey, result, seedBase });
+  const tail = [];
+  if (last) {
+    tail.push(`## 🕊 最後に`);
+    tail.push(last);
+    tail.push("");
+  }
+
+  return header.join("\n") + body + tail.join("\n");
 }
 
 /* =========================
@@ -232,7 +287,6 @@ function setMinuteActive(minStr) {
 }
 
 function readTimeValueFromUI() {
-  // hiddenの timeValue を正とする（index.htmlにある）
   const hidden = document.getElementById("timeValue");
   const modeUnknown = document.getElementById("timeModeUnknown");
   const modeSet = document.getElementById("timeModeSet");
@@ -351,7 +405,6 @@ async function onGenerate() {
 
   const toneKey = normalizeTone(input.tone);
 
-  // fortune.js 側は birthTime でも拾えるようにしてある
   const engineInput = {
     name: input.name,
     kana: input.kana,
@@ -393,7 +446,6 @@ function bindTimeUI() {
   const b30 = document.getElementById("min30");
   const hidden = document.getElementById("timeValue");
 
-  // 初期状態
   setTimePickOpen(!!modeSet?.checked);
 
   modeUnknown?.addEventListener("change", () => {
@@ -410,10 +462,8 @@ function bindTimeUI() {
   modeSet?.addEventListener("change", () => {
     if (modeSet.checked) {
       setTimePickOpen(true);
-      // 分が未設定なら00
       if (hidden && !hidden.dataset.min) hidden.dataset.min = "00";
       setMinuteActive(hidden?.dataset?.min || "00");
-      // hourが空なら先頭を選ばない（ユーザーが選ぶ）
       saveInputs(getInputFromUI());
     }
   });
@@ -425,7 +475,6 @@ function bindTimeUI() {
   function setMin(minStr) {
     if (hidden) hidden.dataset.min = minStr;
     setMinuteActive(minStr);
-    // hidden.valueも更新
     readTimeValueFromUI();
     saveInputs(getInputFromUI());
   }
@@ -444,7 +493,6 @@ function init() {
 
   bindTimeUI();
 
-  // 変更で自動保存
   const ids = ["name", "kana", "dob", "pref", "tone", "timeHour"];
   for (const id of ids) {
     const el = document.getElementById(id);
