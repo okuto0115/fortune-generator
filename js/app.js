@@ -387,33 +387,27 @@ function clearUI() {
 }
 
 function updateBadges(result) {
-  // 上のバッジ（ピル）
+  const typeObj = findTypeObj(result?.typeKey);
+
+  // 上のバッジ
   setText("badgeType", result?.typeKey ?? "-");
   setText("badgeAxis", result?.meta?.axis ?? "-");
   setText("badgeLevel", result?.meta?.level ?? "-");
 
-  // TYPES から情報取得
-  const typeObj = (window.TYPES || []).find(t => t.key === result?.typeKey) || null;
-
-  // 右上カード（HTMLで確定してるID）
+  // 右上のカード（君のHTMLに合わせて直指定）
   const nameText = typeObj?.name || result?.typeKey || "-";
-  const oneLineText = typeObj?.oneLine || "-";
-  const imgSrc = typeObj?.img || "";
+  const descText = typeObj?.oneLine || "-";
 
   setText("typeName", nameText);
-  setText("typeOneLine", oneLineText);
+  setText("typeOneLine", descText);
 
-  const img = document.getElementById("typeImg");
-  if (img) {
-    if (imgSrc) {
-      img.src = imgSrc;
-      img.style.visibility = "visible";
-    } else {
-      img.removeAttribute("src");
-      img.style.visibility = "hidden";
-    }
+  // （任意）画像もあるなら
+  if (typeObj?.img) {
+    const img = document.getElementById("typeImg");
+    if (img) img.src = typeObj.img;
   }
 }
+
 
 /* =========================
   ボタン処理
