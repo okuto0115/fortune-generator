@@ -115,11 +115,17 @@
     </main>
   </div>
 
-  <!-- JS読み込み順：これが超重要 -->
-  <script src="./js/data.js"></script>
-  <script src="./js/utils.js"></script>
-  <script src="./js/fortune.js"></script>
-  <script src="./js/app.js"></script>
+<!-- データ土台（絶対に一番最初） -->
+<script src="./js/data.js"></script>
+
+<!-- あなたが触る場所：文章・口調・語尾・占い結果 -->
+<script src="./js/data.custom.js"></script>
+
+<!-- ロジック -->
+<script src="./js/utils.js"></script>
+<script src="./js/fortune.js"></script>
+<script src="./js/app.js"></script>
+
 
 
 
