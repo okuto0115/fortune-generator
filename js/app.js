@@ -1,8 +1,8 @@
 /* =========================================================================
-  app.js / Version 10.2 (FINAL)
-  - ニックネーム入力（任意）→出力に反映
-  - 「最後に」の上に1行空ける
-  - ファイル内容が変わったら Version を自動で+1（localStorage）
+  app.js / Version 11.0
+  - ✅ニックネーム入力（nick）を出力に反映
+  - ✅「最後に」の上に1行空ける
+  - ✅「◯◯クマのあなた」「◯◯クマなんだから」だけ出力時に整形（文章生成自体は触らない）
 ============================================================================ */
 
 const $ = (sel) => document.querySelector(sel);
@@ -14,6 +14,45 @@ function setText(id, text) {
 function setValue(id, val) {
   const el = document.getElementById(id);
   if (el) el.value = val ?? "";
+}
+
+/* =========================
+  ✅ 呼び名ルール（ここだけ触ればOK）
+========================= */
+const ADDRESSING_RULES = {
+  // ニックネーム未入力のときの呼び名
+  defaultSoft: "あなた",
+  defaultStandard: "あなた",
+  defaultToxic: "あんた",
+
+  // 「◯◯クマのあなた」だけ潰す
+  kumaOfPattern: /([^\s　\n]{2,}クマ)の(あなた|あんた)/g,
+
+  // 「◯◯クマなんだから」だけ潰す
+  kumaBecausePattern: /([^\s　\n]{2,}クマ)なんだから/g,
+};
+
+function chooseDisplayName(input, toneKey) {
+  const nick = safeTrim(input.nick);
+  if (nick) return nick;
+
+  if (toneKey === "toxic") return ADDRESSING_RULES.defaultToxic;
+  if (toneKey === "soft") return ADDRESSING_RULES.defaultSoft;
+  return ADDRESSING_RULES.defaultStandard;
+}
+
+function normalizeAddressing(text, input, toneKey) {
+  const who = chooseDisplayName(input, toneKey);
+
+  let s = String(text || "");
+
+  // ①「◯◯クマのあなた」→「あなた」or「ニックネーム」
+  s = s.replace(ADDRESSING_RULES.kumaOfPattern, who);
+
+  // ②「◯◯クマなんだから」→「あなたなんだから」or「ニックネームなんだから」
+  s = s.replace(ADDRESSING_RULES.kumaBecausePattern, `${who}なんだから`);
+
+  return s;
 }
 
 /* =========================
@@ -30,109 +69,9 @@ function setTextFirstHit(candidates, text) {
 }
 
 /* =========================
-  ✅ Version 自動加算（ここだけ触れば運用しやすい）
-  - GitHub外に移しても、ここの設定だけで調整できる
-========================= */
-const VERSION_TRACKER = {
-  // localStorageの保存キー（好きに変えてOK）
-  storageVersionKey: "kuma_app_version",
-  storageHashKey: "kuma_app_signature_hash",
-
-  // 初期Versionの取り方（HTMLに書いてある Version 27 など）
-  // ここは触らなくてOK
-  fallbackFromDOM: () => {
-    const el = document.querySelector(".ver");
-    const m = (el?.textContent || "").match(/Version\s*(\d+)/i);
-    return m ? Number(m[1]) : 1;
-  },
-
-  // ✅ 「更新ボタンを押してファイルが変わった」＝内容が変わる想定のファイル一覧
-  // 後で編集したいときは、この配列を増減するだけでOK
-  filesToWatch: [
-    "./index.html",
-    "./js/app.js",
-    "./js/fortune.js",
-    "./js/data.js",
-    "./js/data.custom.js",
-    "./js/utils.js",
-    "./css/style.css",
-  ],
-
-  // fetchできない環境（file://等）でも落とさない
-  allowFetchFailure: true,
-};
-
-function updateVersionText(versionNumber) {
-  // .ver の表示を更新
-  const el = document.querySelector(".ver");
-  if (el) el.textContent = `Version ${versionNumber}`;
-}
-
-async function computeSignatureHash(urls) {
-  // ファイルの中身を全部つないでハッシュ化
-  // ※同一オリジンの静的サイト想定
-  let combined = "";
-  for (const url of urls) {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`fetch failed: ${url} (${res.status})`);
-    const text = await res.text();
-    combined += `\n/*FILE:${url}*/\n` + text;
-  }
-  return xfnv1a(combined);
-}
-
-async function autoBumpVersionIfChanged() {
-  const { storageVersionKey, storageHashKey, fallbackFromDOM, filesToWatch, allowFetchFailure } = VERSION_TRACKER;
-
-  let currentVersion = 1;
-  try {
-    const saved = localStorage.getItem(storageVersionKey);
-    currentVersion = saved ? Number(saved) : fallbackFromDOM();
-    if (!Number.isFinite(currentVersion) || currentVersion < 1) currentVersion = fallbackFromDOM();
-  } catch {
-    currentVersion = fallbackFromDOM();
-  }
-
-  // まず表示は出す（fetchで失敗してもVersionは見せる）
-  updateVersionText(currentVersion);
-
-  // シグネチャチェック（内容が変わったらVersion+1）
-  try {
-    const newHash = await computeSignatureHash(filesToWatch);
-
-    let oldHash = null;
-    try { oldHash = localStorage.getItem(storageHashKey); } catch {}
-
-    // 初回は保存だけ（増やさない）
-    if (!oldHash) {
-      try {
-        localStorage.setItem(storageHashKey, String(newHash));
-        localStorage.setItem(storageVersionKey, String(currentVersion));
-      } catch {}
-      return;
-    }
-
-    if (String(oldHash) !== String(newHash)) {
-      const bumped = currentVersion + 1;
-      currentVersion = bumped;
-
-      updateVersionText(currentVersion);
-
-      try {
-        localStorage.setItem(storageHashKey, String(newHash));
-        localStorage.setItem(storageVersionKey, String(currentVersion));
-      } catch {}
-    }
-  } catch (e) {
-    if (!allowFetchFailure) throw e;
-    // fetchできない環境では何もしない（表示だけ）
-  }
-}
-
-/* =========================
   入力保存
 ========================= */
-const STORAGE_KEY = "fortune_generator_v10_inputs";
+const STORAGE_KEY = "fortune_generator_v11_inputs";
 
 function loadInputs() {
   try {
@@ -324,19 +263,12 @@ function findTypeObj(typeKey) {
   return types.find(t => t.key === typeKey) || null;
 }
 
-/* =========================
-  ✅ 出力（ニックネーム反映）
-========================= */
 function buildOutput({ input, toneKey, result }) {
-  // ✅ 表示名：nickname > name
-  const displayName = safeTrim(input.nickname) || safeTrim(input.name) || "（名前未入力）";
-
-  // ✅ seed にも nickname を入れて「同一人物でも呼び名が違うと結果が変わる」挙動にできる
   const seedBase = xfnv1a(
     [
       safeTrim(input.name),
-      safeTrim(input.nickname),
       safeTrim(input.kana),
+      safeTrim(input.nick),
       safeTrim(input.dob),
       safeTrim(input.pref),
       safeTrim(input.timeValue),
@@ -347,10 +279,17 @@ function buildOutput({ input, toneKey, result }) {
 
   const typeObj = findTypeObj(result.typeKey);
 
+  const displayName = chooseDisplayName(input, toneKey);
+
   const header = [];
-  header.push(`# 🐻 クマ占い：${displayName}`);
+  header.push(`# 🐻 クマ占い：${displayName || "（名前未入力）"}`);
+
+  // 情報は残す（文章はいじらない前提なので「入力情報」として）
+  if (safeTrim(input.name)) header.push(`名前：${safeTrim(input.name)}`);
   if (safeTrim(input.kana)) header.push(`ふりがな：${safeTrim(input.kana)}`);
+  if (safeTrim(input.nick)) header.push(`ニックネーム：${safeTrim(input.nick)}`);
   header.push("");
+
   header.push(`生年月日：${formatDateJP(input.dob)}`);
   header.push(`出生地：${safeTrim(input.pref) || "（未選択）"}`);
   header.push(`出生時間：${safeTrim(input.timeValue) || "不明"}`);
@@ -367,14 +306,20 @@ function buildOutput({ input, toneKey, result }) {
   const finalMsg = buildFinalMessage({ toneKey, result, seedBase });
   const tail = [];
   if (finalMsg) {
-    // ✅ ここで「最後に」の上に “もう1行” 空ける
-    tail.push("");                // ←追加の空行
+    // ✅ここ：最後に の “上” を1行あける（追加の空行）
+    tail.push("");
     tail.push(`## 🕊 最後に`);
     tail.push(finalMsg);
     tail.push("");
   }
 
-  return header.join("\n") + body + tail.join("\n");
+  // まず結合
+  let text = header.join("\n") + body + tail.join("\n");
+
+  // ✅出力直前に呼び名だけ整形（文章ファイルは触らない）
+  text = normalizeAddressing(text, input, toneKey);
+
+  return text;
 }
 
 /* =========================
@@ -462,8 +407,8 @@ function writeTimeValueToUI(timeValue) {
 function getInputFromUI() {
   return {
     name: $("#name")?.value ?? "",
-    nickname: $("#nickname")?.value ?? "",   // ✅追加
     kana: $("#kana")?.value ?? "",
+    nick: $("#nick")?.value ?? "",
     dob: $("#dob")?.value ?? "",
     pref: $("#pref")?.value ?? "",
     timeValue: readTimeValueFromUI(),
@@ -474,8 +419,8 @@ function getInputFromUI() {
 function applyInputToUI(saved) {
   if (!saved) return;
   setValue("name", saved.name);
-  setValue("nickname", saved.nickname);      // ✅追加
   setValue("kana", saved.kana);
+  setValue("nick", saved.nick);
   setValue("dob", saved.dob);
   setValue("pref", saved.pref);
   setValue("tone", saved.tone || "standard");
@@ -484,8 +429,8 @@ function applyInputToUI(saved) {
 
 function clearUI() {
   setValue("name", "");
-  setValue("nickname", "");                  // ✅追加
   setValue("kana", "");
+  setValue("nick", "");
   setValue("dob", "");
   setValue("pref", "");
   setValue("tone", "standard");
@@ -495,7 +440,6 @@ function clearUI() {
   setText("badgeAxis", "-");
   setText("badgeLevel", "-");
 
-  // 右上カード系も一応消す
   setTextFirstHit(["badgeTypeName","badgeTypeDesc","#badgeTypeName","#badgeTypeDesc",".typeName",".typeDesc"], "-");
   setTextFirstHit(["typeName","kumaTypeName","kumaName","#typeName","#kumaTypeName","#kumaName"], "-");
   setTextFirstHit(["typeDesc","kumaTypeDesc","kumaDesc","#typeDesc","#kumaTypeDesc","#kumaDesc"], "-");
@@ -504,19 +448,16 @@ function clearUI() {
 function updateBadges(result) {
   const typeObj = findTypeObj(result?.typeKey);
 
-  // 上のバッジ
   setText("badgeType", result?.typeKey ?? "-");
   setText("badgeAxis", result?.meta?.axis ?? "-");
   setText("badgeLevel", result?.meta?.level ?? "-");
 
-  // 右上のカード（君のHTMLに合わせて直指定）
   const nameText = typeObj?.name || result?.typeKey || "-";
   const descText = typeObj?.oneLine || "-";
 
   setText("typeName", nameText);
   setText("typeOneLine", descText);
 
-  // （任意）画像もあるなら
   if (typeObj?.img) {
     const img = document.getElementById("typeImg");
     if (img) img.src = typeObj.img;
@@ -615,10 +556,7 @@ function bindTimeUI() {
   b30?.addEventListener("click", () => setMin("30"));
 }
 
-async function init() {
-  // ✅ Version自動加算（先に表示更新）
-  await autoBumpVersionIfChanged();
-
+function init() {
   const saved = loadInputs();
   applyInputToUI(saved);
 
@@ -628,8 +566,7 @@ async function init() {
 
   bindTimeUI();
 
-  // ✅ nickname を監視対象に追加
-  const ids = ["name", "nickname", "kana", "dob", "pref", "tone", "timeHour"];
+  const ids = ["name", "kana", "nick", "dob", "pref", "tone", "timeHour"];
   for (const id of ids) {
     const el = document.getElementById(id);
     if (!el) continue;
@@ -637,4 +574,4 @@ async function init() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => { init(); });
+document.addEventListener("DOMContentLoaded", init);
