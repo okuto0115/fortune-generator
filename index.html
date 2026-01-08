@@ -12,7 +12,7 @@
     <header class="header">
       <h1>クマ占いジェネレーター</h1>
       <p class="sub">ふわふわ見た目 × 裏はガチ寄り（出生時間なしでも成立）</p>
-      <p class="ver">Version 27</p>
+      <p class="ver">Version <span id="appVersion">-</span></p>
     </header>
 
     <main class="grid">
@@ -24,12 +24,12 @@
         <label>名前（漢字など）</label>
         <input id="name" placeholder="例：山田 太郎" autocomplete="name" />
 
-        <!-- ✅追加：ニックネーム（任意） -->
-        <label>ニックネーム（任意・出力に反映）</label>
-        <input id="nickname" placeholder="例：カイト / くまさん" autocomplete="nickname" />
-
         <label>ふりがな（ひらがな・任意）</label>
         <input id="kana" placeholder="例：やまだ たろう" />
+
+        <!-- ✅追加：ニックネーム -->
+        <label>ニックネーム（任意・出力で優先表示）</label>
+        <input id="nick" placeholder="例：カイト / かいと / たろ" />
 
         <label>生年月日</label>
         <input id="dob" type="date" />
@@ -84,7 +84,8 @@
 
         <p class="hint">
           デザイン：<b>css/style.css</b><br>
-          文章：<b>js/data.js</b> ／ ロジック：<b>js/fortune.js</b>
+          文章：<b>js/data.js</b> ／ 文章上書き：<b>js/data.custom.js</b><br>
+          ロジック：<b>js/fortune.js</b> ／ UI：<b>js/app.js</b>
         </p>
       </section>
 
@@ -119,16 +120,18 @@
     </main>
   </div>
 
-<!-- データ土台（絶対に一番最初） -->
-<script src="./js/data.js"></script>
+  <!-- データ土台（絶対に一番最初） -->
+  <script src="./js/data.js"></script>
 
-<!-- あなたが触る場所：文章・口調・語尾・占い結果 -->
-<script src="./js/data.custom.js"></script>
+  <!-- あなたが触る場所：文章・口調・語尾・占い結果 -->
+  <script src="./js/data.custom.js"></script>
 
-<!-- ロジック -->
-<script src="./js/utils.js"></script>
-<script src="./js/fortune.js"></script>
-<script src="./js/app.js"></script>
+  <!-- ✅Version自動加算（新規） -->
+  <script src="./js/versioning.js"></script>
 
+  <!-- ロジック -->
+  <script src="./js/utils.js"></script>
+  <script src="./js/fortune.js"></script>
+  <script src="./js/app.js"></script>
 </body>
 </html>
