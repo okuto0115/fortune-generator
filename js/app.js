@@ -1,7 +1,8 @@
 /* =========================================================================
-  app.js / Version 10.1 (FINAL)
-  - 右上カードのタイプ名/説明：複数候補ID/セレクタに対応して必ず表示
-  - 「最後に」は本文(5運勢)の“後ろ”へ移動
+  app.js / Version 10.2 (FINAL)
+  - ニックネーム入力（任意）→出力に反映
+  - 「最後に」の上に1行空ける
+  - ファイル内容が変わったら Version を自動で+1（localStorage）
 ============================================================================ */
 
 const $ = (sel) => document.querySelector(sel);
@@ -26,6 +27,106 @@ function setTextFirstHit(candidates, text) {
     if (el) { el.textContent = text; return true; }
   }
   return false;
+}
+
+/* =========================
+  ✅ Version 自動加算（ここだけ触れば運用しやすい）
+  - GitHub外に移しても、ここの設定だけで調整できる
+========================= */
+const VERSION_TRACKER = {
+  // localStorageの保存キー（好きに変えてOK）
+  storageVersionKey: "kuma_app_version",
+  storageHashKey: "kuma_app_signature_hash",
+
+  // 初期Versionの取り方（HTMLに書いてある Version 27 など）
+  // ここは触らなくてOK
+  fallbackFromDOM: () => {
+    const el = document.querySelector(".ver");
+    const m = (el?.textContent || "").match(/Version\s*(\d+)/i);
+    return m ? Number(m[1]) : 1;
+  },
+
+  // ✅ 「更新ボタンを押してファイルが変わった」＝内容が変わる想定のファイル一覧
+  // 後で編集したいときは、この配列を増減するだけでOK
+  filesToWatch: [
+    "./index.html",
+    "./js/app.js",
+    "./js/fortune.js",
+    "./js/data.js",
+    "./js/data.custom.js",
+    "./js/utils.js",
+    "./css/style.css",
+  ],
+
+  // fetchできない環境（file://等）でも落とさない
+  allowFetchFailure: true,
+};
+
+function updateVersionText(versionNumber) {
+  // .ver の表示を更新
+  const el = document.querySelector(".ver");
+  if (el) el.textContent = `Version ${versionNumber}`;
+}
+
+async function computeSignatureHash(urls) {
+  // ファイルの中身を全部つないでハッシュ化
+  // ※同一オリジンの静的サイト想定
+  let combined = "";
+  for (const url of urls) {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`fetch failed: ${url} (${res.status})`);
+    const text = await res.text();
+    combined += `\n/*FILE:${url}*/\n` + text;
+  }
+  return xfnv1a(combined);
+}
+
+async function autoBumpVersionIfChanged() {
+  const { storageVersionKey, storageHashKey, fallbackFromDOM, filesToWatch, allowFetchFailure } = VERSION_TRACKER;
+
+  let currentVersion = 1;
+  try {
+    const saved = localStorage.getItem(storageVersionKey);
+    currentVersion = saved ? Number(saved) : fallbackFromDOM();
+    if (!Number.isFinite(currentVersion) || currentVersion < 1) currentVersion = fallbackFromDOM();
+  } catch {
+    currentVersion = fallbackFromDOM();
+  }
+
+  // まず表示は出す（fetchで失敗してもVersionは見せる）
+  updateVersionText(currentVersion);
+
+  // シグネチャチェック（内容が変わったらVersion+1）
+  try {
+    const newHash = await computeSignatureHash(filesToWatch);
+
+    let oldHash = null;
+    try { oldHash = localStorage.getItem(storageHashKey); } catch {}
+
+    // 初回は保存だけ（増やさない）
+    if (!oldHash) {
+      try {
+        localStorage.setItem(storageHashKey, String(newHash));
+        localStorage.setItem(storageVersionKey, String(currentVersion));
+      } catch {}
+      return;
+    }
+
+    if (String(oldHash) !== String(newHash)) {
+      const bumped = currentVersion + 1;
+      currentVersion = bumped;
+
+      updateVersionText(currentVersion);
+
+      try {
+        localStorage.setItem(storageHashKey, String(newHash));
+        localStorage.setItem(storageVersionKey, String(currentVersion));
+      } catch {}
+    }
+  } catch (e) {
+    if (!allowFetchFailure) throw e;
+    // fetchできない環境では何もしない（表示だけ）
+  }
 }
 
 /* =========================
@@ -222,10 +323,19 @@ function findTypeObj(typeKey) {
   if (!Array.isArray(types)) return null;
   return types.find(t => t.key === typeKey) || null;
 }
+
+/* =========================
+  ✅ 出力（ニックネーム反映）
+========================= */
 function buildOutput({ input, toneKey, result }) {
+  // ✅ 表示名：nickname > name
+  const displayName = safeTrim(input.nickname) || safeTrim(input.name) || "（名前未入力）";
+
+  // ✅ seed にも nickname を入れて「同一人物でも呼び名が違うと結果が変わる」挙動にできる
   const seedBase = xfnv1a(
     [
       safeTrim(input.name),
+      safeTrim(input.nickname),
       safeTrim(input.kana),
       safeTrim(input.dob),
       safeTrim(input.pref),
@@ -238,7 +348,7 @@ function buildOutput({ input, toneKey, result }) {
   const typeObj = findTypeObj(result.typeKey);
 
   const header = [];
-  header.push(`# 🐻 クマ占い：${safeTrim(input.name) || "（名前未入力）"}`);
+  header.push(`# 🐻 クマ占い：${displayName}`);
   if (safeTrim(input.kana)) header.push(`ふりがな：${safeTrim(input.kana)}`);
   header.push("");
   header.push(`生年月日：${formatDateJP(input.dob)}`);
@@ -257,6 +367,8 @@ function buildOutput({ input, toneKey, result }) {
   const finalMsg = buildFinalMessage({ toneKey, result, seedBase });
   const tail = [];
   if (finalMsg) {
+    // ✅ ここで「最後に」の上に “もう1行” 空ける
+    tail.push("");                // ←追加の空行
     tail.push(`## 🕊 最後に`);
     tail.push(finalMsg);
     tail.push("");
@@ -350,6 +462,7 @@ function writeTimeValueToUI(timeValue) {
 function getInputFromUI() {
   return {
     name: $("#name")?.value ?? "",
+    nickname: $("#nickname")?.value ?? "",   // ✅追加
     kana: $("#kana")?.value ?? "",
     dob: $("#dob")?.value ?? "",
     pref: $("#pref")?.value ?? "",
@@ -361,6 +474,7 @@ function getInputFromUI() {
 function applyInputToUI(saved) {
   if (!saved) return;
   setValue("name", saved.name);
+  setValue("nickname", saved.nickname);      // ✅追加
   setValue("kana", saved.kana);
   setValue("dob", saved.dob);
   setValue("pref", saved.pref);
@@ -370,6 +484,7 @@ function applyInputToUI(saved) {
 
 function clearUI() {
   setValue("name", "");
+  setValue("nickname", "");                  // ✅追加
   setValue("kana", "");
   setValue("dob", "");
   setValue("pref", "");
@@ -407,7 +522,6 @@ function updateBadges(result) {
     if (img) img.src = typeObj.img;
   }
 }
-
 
 /* =========================
   ボタン処理
@@ -501,7 +615,10 @@ function bindTimeUI() {
   b30?.addEventListener("click", () => setMin("30"));
 }
 
-function init() {
+async function init() {
+  // ✅ Version自動加算（先に表示更新）
+  await autoBumpVersionIfChanged();
+
   const saved = loadInputs();
   applyInputToUI(saved);
 
@@ -511,7 +628,8 @@ function init() {
 
   bindTimeUI();
 
-  const ids = ["name", "kana", "dob", "pref", "tone", "timeHour"];
+  // ✅ nickname を監視対象に追加
+  const ids = ["name", "nickname", "kana", "dob", "pref", "tone", "timeHour"];
   for (const id of ids) {
     const el = document.getElementById(id);
     if (!el) continue;
@@ -519,4 +637,4 @@ function init() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => { init(); });
